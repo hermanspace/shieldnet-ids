@@ -21,7 +21,10 @@ services:
       - timescaledb_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      # Diikat ke loopback: database hanya perlu diakses antar-container
+      # (jaringan internal Docker) dan untuk debugging dari host. JANGAN
+      # diekspos ke publik — UFW tidak melindungi port yang di-publish Docker.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ids_user} -d ${DB_NAME:-ids_thesis}"]
       interval: 10s
@@ -40,7 +43,8 @@ services:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
       - redis_data:/data
     ports:
-      - "6380:6379"
+      # Diikat ke loopback — alasan sama dengan TimescaleDB di atas
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -113,7 +117,9 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      # Diikat ke loopback: akses via SSH tunnel bila diperlukan
+      # (ssh -L 3000:localhost:3000 user@vps), atau lewat reverse proxy
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     depends_on:
       timescaledb:
         condition: service_healthy
