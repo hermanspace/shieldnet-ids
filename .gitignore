@@ -1,0 +1,43 @@
+# =============================================================================
+# .gitignore — ShieldNet IDS (thesis-ids)
+# =============================================================================
+
+# Konfigurasi lokal berisi kredensial (DB, session secret, Grafana, MikroTik).
+# Gunakan .env.example sebagai templat.
+.env
+
+# Artefak Claude Code / asisten AI
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+settings.local.json
+*.scratchpad*
+
+# File sistem operasi
+.DS_Store
+Thumbs.db
+
+# Artefak Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Model machine learning hasil pelatihan (dibuat ulang saat runtime)
+*.pkl
+models/
+
+# Binary hasil build Go (build terjadi di dalam Docker)
+golang-collector/collector
+golang-collector/main
+*.exe
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Log dan berkas sementara
+*.log
+tmp/

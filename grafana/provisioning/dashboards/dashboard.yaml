@@ -1,0 +1,17 @@
+# =============================================================================
+# Konfigurasi provisioning dashboard Grafana
+# Menentukan lokasi file JSON dashboard yang akan dimuat otomatis
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: IDS Dashboards
+    orgId: 1
+    folder: "Sistem Deteksi Intrusi"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

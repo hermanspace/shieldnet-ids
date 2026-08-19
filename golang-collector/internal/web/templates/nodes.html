@@ -1,0 +1,121 @@
+{{define "content"}}
+
+<!-- Form tambah node baru -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="text-base font-semibold text-gray-800 mb-4">Tambah Node MikroTik Baru</h3>
+    <form method="POST" action="/nodes/add"
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">ID Node <span class="text-red-500">*</span></label>
+            <input type="text" name="node_id" required placeholder="Contoh: router-gedung-a"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">IP Address <span class="text-red-500">*</span></label>
+            <input type="text" name="ip_address" required placeholder="Contoh: 192.168.1.1"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Port API</label>
+            <input type="number" name="api_port" value="8728" placeholder="8728"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Username <span class="text-red-500">*</span></label>
+            <input type="text" name="username" required value="admin"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Password <span class="text-red-500">*</span></label>
+            <input type="password" name="password" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Lokasi</label>
+            <input type="text" name="location" placeholder="Contoh: Gedung A Lantai 1"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="flex items-end">
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded transition-colors">
+                Tambah Node
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Daftar node -->
+<div class="bg-white rounded-lg shadow">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-base font-semibold text-gray-800">Daftar Node MikroTik</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID Node</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Port</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lokasi</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status API</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktif</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                {{if .Data}}
+                {{range .Data}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium text-gray-900">{{.NodeID}}</td>
+                    <td class="px-4 py-3 font-mono text-blue-600">{{.IPAddress}}</td>
+                    <td class="px-4 py-3 text-gray-500">{{.APIPort}}</td>
+                    <td class="px-4 py-3 text-gray-500">{{.Username}}</td>
+                    <td class="px-4 py-3 text-gray-500">{{if .Location}}{{.Location}}{{else}}-{{end}}</td>
+                    <td class="px-4 py-3"
+                        hx-get="/nodes/status?node_id={{.NodeID}}"
+                        hx-trigger="load"
+                        hx-swap="innerHTML">
+                        <span class="text-xs text-gray-400">Memeriksa...</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        {{if .IsActive}}
+                        <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">Aktif</span>
+                        {{else}}
+                        <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Nonaktif</span>
+                        {{end}}
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex gap-2">
+                            <form method="POST" action="/nodes/toggle">
+                                <input type="hidden" name="node_id" value="{{.NodeID}}">
+                                <input type="hidden" name="active" value="{{if .IsActive}}false{{else}}true{{end}}">
+                                <button type="submit"
+                                        class="px-2 py-1 text-xs {{if .IsActive}}bg-yellow-100 hover:bg-yellow-200 text-yellow-700{{else}}bg-green-100 hover:bg-green-200 text-green-700{{end}} rounded transition-colors">
+                                    {{if .IsActive}}Nonaktifkan{{else}}Aktifkan{{end}}
+                                </button>
+                            </form>
+                            <form method="POST" action="/nodes/delete">
+                                <input type="hidden" name="id" value="{{.ID}}">
+                                <button type="submit"
+                                        class="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+                                        onclick="return confirm('Hapus node {{.NodeID}}?')">
+                                    Hapus
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr>
+                    <td colspan="8" class="px-6 py-10 text-center text-gray-400 text-sm">
+                        Belum ada node terdaftar
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

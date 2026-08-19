@@ -1,0 +1,24 @@
+# =============================================================================
+# Konfigurasi datasource TimescaleDB untuk Grafana
+# File ini memastikan Grafana otomatis terhubung ke database saat pertama kali berjalan
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    uid: timescaledb-ids
+    type: grafana-postgresql-datasource
+    url: timescaledb:5432
+    database: ids_thesis
+    user: ids_user
+    secureJsonData:
+      password: ids_password
+    jsonData:
+      sslmode: disable
+      # Aktifkan mode TimescaleDB untuk optimasi query time-series
+      timescaledb: true
+      # Gunakan timezone lokal untuk tampilan waktu
+      postgresVersion: 1500
+    isDefault: true
+    editable: true

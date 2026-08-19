@@ -1,0 +1,312 @@
+{{define "content"}}
+{{$d := .Data}}
+
+<!-- =====================================================================
+     HALAMAN TENTANG SISTEM
+     Penjelasan lengkap cara kerja, arsitektur, dan formula machine learning.
+     Dirancang sebagai bahan penjelasan pada presentasi sidang tesis.
+     ===================================================================== -->
+
+<!-- Ringkasan sistem -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="text-lg font-bold text-gray-800 mb-1">
+        Centralized Lightweight Collaborative Intrusion Detection System (CIDS)
+    </h3>
+    <p class="text-sm text-gray-500 mb-4">Berbasis log RouterOS MikroTik dan algoritma Isolation Forest</p>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm">
+        <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+            <p class="font-semibold text-blue-800 mb-1">Agentless</p>
+            <p class="text-gray-600">Tidak ada perangkat lunak tambahan di router. Sistem hanya memanfaatkan
+            fasilitas <span class="font-mono">Remote Syslog</span> bawaan RouterOS (UDP&nbsp;514), sehingga beban
+            komputasi router tetap rendah.</p>
+        </div>
+        <div class="bg-purple-50 border border-purple-100 rounded-lg p-4">
+            <p class="font-semibold text-purple-800 mb-1">Terpusat &amp; Lightweight</p>
+            <p class="text-gray-600">Seluruh analisis machine learning dilakukan pada satu server pusat
+            menggunakan algoritma berkompleksitas rendah, cocok untuk lingkungan UMKM dengan sumber daya terbatas.</p>
+        </div>
+        <div class="bg-green-50 border border-green-100 rounded-lg p-4">
+            <p class="font-semibold text-green-800 mb-1">Kolaboratif</p>
+            <p class="text-gray-600">Serangan yang terdeteksi pada satu node otomatis diblokir di
+            <span class="font-semibold">semua</span> node MikroTik melalui mekanisme Threat Intelligence Sharing —
+            pertahanan kolektif.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Alur kerja sistem -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="font-bold text-gray-800 mb-4">Alur Kerja Sistem</h3>
+    <div class="flex flex-wrap items-stretch gap-2 text-xs text-center">
+        <div class="flex-1 min-w-36 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <p class="font-bold text-gray-700 mb-1">1. Router MikroTik</p>
+            <p class="text-gray-500">Mengirim log aktivitas via Syslog UDP&nbsp;514</p>
+        </div>
+        <div class="self-center text-gray-400">→</div>
+        <div class="flex-1 min-w-36 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="font-bold text-blue-700 mb-1">2. Golang Collector</p>
+            <p class="text-gray-500">Parsing log (regex) → simpan ke TimescaleDB → notifikasi Redis Stream</p>
+        </div>
+        <div class="self-center text-gray-400">→</div>
+        <div class="flex-1 min-w-36 bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <p class="font-bold text-purple-700 mb-1">3. Python Analyst</p>
+            <p class="text-gray-500">Ambil histori {{index $d "analysis_window"}} menit per IP → ekstraksi 9 fitur →
+            StandardScaler → Isolation Forest</p>
+        </div>
+        <div class="self-center text-gray-400">→</div>
+        <div class="flex-1 min-w-36 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p class="font-bold text-yellow-700 mb-1">4. Decision Engine</p>
+            <p class="text-gray-500">Skor + keyakinan → Izinkan / Monitor / Blokir</p>
+        </div>
+        <div class="self-center text-gray-400">→</div>
+        <div class="flex-1 min-w-36 bg-red-50 border border-red-200 rounded-lg p-3">
+            <p class="font-bold text-red-700 mb-1">5. Distribusi Kolaboratif</p>
+            <p class="text-gray-500">RouterOS API menambahkan IP ke address-list
+            <span class="font-mono">ids-blocked</span> di semua node aktif (paralel, goroutine)</p>
+        </div>
+    </div>
+    <p class="text-xs text-gray-400 mt-3">
+        Hasil analisis dikirim balik dari Python Analyst ke Collector melalui Redis Publish/Subscribe
+        (kanal <span class="font-mono">ids:analysis:result</span>) sehingga tidak ada polling database.
+        IP yang berada di whitelist dilewati sebelum analisis untuk menekan false positive.
+    </p>
+</div>
+
+<!-- Formula Isolation Forest -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="font-bold text-gray-800 mb-1">Formula Isolation Forest</h3>
+        <p class="text-xs text-gray-400 mb-4">Liu, Ting &amp; Zhou (2008) — unsupervised anomaly detection</p>
+
+        <div class="space-y-4 text-sm">
+            <div>
+                <p class="font-semibold text-gray-700 mb-1">Prinsip dasar</p>
+                <p class="text-gray-600">Data anomali lebih <em>mudah diisolasi</em> oleh pemisahan acak
+                dibandingkan data normal, sehingga berada pada kedalaman pohon yang lebih dangkal —
+                panjang lintasan <span class="font-mono">h(x)</span> kecil.</p>
+            </div>
+
+            <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Skor anomali</p>
+                <p class="font-mono text-base text-gray-800">s(x, n) = 2<sup>−E[h(x)] / c(n)</sup></p>
+                <ul class="mt-2 text-xs text-gray-500 space-y-1">
+                    <li><span class="font-mono">E[h(x)]</span> — rata-rata panjang lintasan x pada seluruh pohon ({{index $d "n_estimators"}} pohon)</li>
+                    <li><span class="font-mono">c(n)</span> — normalisasi: rata-rata panjang lintasan pada Binary Search Tree berukuran n</li>
+                </ul>
+            </div>
+
+            <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Faktor normalisasi</p>
+                <p class="font-mono text-base text-gray-800">c(n) = 2H(n−1) − 2(n−1)/n</p>
+                <p class="font-mono text-sm text-gray-600 mt-1">H(i) ≈ ln(i) + 0.5772156649 <span class="text-gray-400">(konstanta Euler)</span></p>
+            </div>
+
+            <div>
+                <p class="font-semibold text-gray-700 mb-1">Interpretasi</p>
+                <ul class="text-xs text-gray-600 space-y-1">
+                    <li>• s → 1 : sangat anomali (lintasan pendek, mudah diisolasi)</li>
+                    <li>• s → 0.5 : tidak dapat dibedakan dari normal</li>
+                    <li>• s → 0 : sangat normal</li>
+                </ul>
+            </div>
+
+            <div class="bg-blue-50 rounded-md p-4 border border-blue-100 text-xs text-gray-600">
+                <p class="font-semibold text-blue-800 mb-1">Implementasi scikit-learn</p>
+                <p>Sistem memakai <span class="font-mono">decision_function(x)</span> yang merupakan
+                transformasi dari s(x,n): <span class="font-semibold">nilai negatif = anomali, positif = normal</span>.
+                Ambang keputusan mengikuti kalibrasi parameter <span class="font-mono">contamination = {{index $d "contamination"}}</span>
+                (estimasi proporsi anomali pada data).</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preprocessing dan confidence -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="font-bold text-gray-800 mb-4">Preprocessing &amp; Tingkat Keyakinan</h3>
+        <div class="space-y-4 text-sm">
+
+            <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Normalisasi fitur — StandardScaler</p>
+                <p class="font-mono text-base text-gray-800">z = (x − μ) / σ</p>
+                <p class="text-xs text-gray-500 mt-2">Setiap fitur distandarkan (rata-rata 0, deviasi 1) agar
+                fitur berskala besar (mis. total_requests) tidak mendominasi fitur rasio (0–1).
+                Parameter μ dan σ disimpan bersama model agar inferensi konsisten.</p>
+            </div>
+
+            <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Keyakinan dua-faktor (confidence)</p>
+                <p class="font-mono text-sm text-gray-800 leading-6">
+                    kepastian_skor&nbsp;= min(0.5 + |skor − T| × 2, 1.0)<br>
+                    kecukupan_data = min(n_aktivitas / {{index $d "confidence_full_n"}}, 1.0)<br>
+                    <span class="font-bold">keyakinan = kepastian_skor × kecukupan_data</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-2">
+                    T = ambang anomali ({{index $d "anomaly_threshold"}}). Skor yang jauh dari ambang DAN
+                    didukung data yang cukup menghasilkan keyakinan tinggi. Ini mencegah pemblokiran
+                    berdasarkan 1–2 log saja.</p>
+            </div>
+
+            <div class="bg-gray-50 rounded-md p-4 border border-gray-200">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Decision Engine (nilai aktif saat ini)</p>
+                <div class="space-y-1.5 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="w-16 px-1.5 py-0.5 text-center font-semibold bg-green-100 text-green-700 rounded">Izinkan</span>
+                        <span class="font-mono text-gray-600">skor ≥ {{index $d "anomaly_threshold"}}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-16 px-1.5 py-0.5 text-center font-semibold bg-yellow-100 text-yellow-700 rounded">Monitor</span>
+                        <span class="font-mono text-gray-600">skor &lt; {{index $d "anomaly_threshold"}}, syarat blokir belum terpenuhi</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-16 px-1.5 py-0.5 text-center font-semibold bg-red-100 text-red-700 rounded">Blokir</span>
+                        <span class="font-mono text-gray-600">skor &lt; {{index $d "block_score"}} DAN keyakinan ≥ {{index $d "block_confidence"}}</span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Gerbang ganda (skor + keyakinan) dirancang konservatif:
+                mengutamakan presisi tinggi / false positive rendah agar trafik pelanggan tidak terblokir keliru.
+                Operator tetap dapat melakukan override manual (whitelist/blacklist).
+                Admin dapat menyesuaikan seluruh ambang ini dari halaman
+                <a href="/settings" class="text-blue-600 hover:underline">Decision Engine</a>
+                tanpa me-restart sistem.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 9 fitur -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="font-bold text-gray-800 mb-1">Ekstraksi Fitur Perilaku</h3>
+    <p class="text-xs text-gray-400 mb-4">
+        Analisis dilakukan per alamat IP sumber terhadap seluruh aktivitasnya dalam jendela
+        {{index $d "analysis_window"}} menit terakhir — bukan per log individual — karena serangan
+        (scan, brute force, flood) adalah <em>pola kumpulan aktivitas</em>, bukan satu paket.
+    </p>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="bg-gray-50">
+                <tr class="text-left text-xs text-gray-500 uppercase">
+                    <th class="px-4 py-2">#</th>
+                    <th class="px-4 py-2">Fitur</th>
+                    <th class="px-4 py-2">Definisi</th>
+                    <th class="px-4 py-2">Indikator Serangan</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-xs">
+                <tr><td class="px-4 py-2 text-gray-400">1</td><td class="px-4 py-2 font-mono">total_requests</td><td class="px-4 py-2 text-gray-600">Jumlah seluruh aktivitas IP dalam jendela</td><td class="px-4 py-2 text-gray-500">Flood / DDoS</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">2</td><td class="px-4 py-2 font-mono">unique_dest_ports</td><td class="px-4 py-2 text-gray-600">Jumlah port tujuan berbeda yang diakses</td><td class="px-4 py-2 text-gray-500">Port scanning</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">3</td><td class="px-4 py-2 font-mono">unique_src_ports</td><td class="px-4 py-2 text-gray-600">Jumlah port asal berbeda</td><td class="px-4 py-2 text-gray-500">Scanner otomatis / SYN flood</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">4</td><td class="px-4 py-2 font-mono">login_fails</td><td class="px-4 py-2 text-gray-600">Jumlah kegagalan autentikasi</td><td class="px-4 py-2 text-gray-500">Brute force</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">5</td><td class="px-4 py-2 font-mono">port_scans</td><td class="px-4 py-2 text-gray-600">Jumlah event terklasifikasi port scan</td><td class="px-4 py-2 text-gray-500">Reconnaissance</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">6</td><td class="px-4 py-2 font-mono">brute_forces</td><td class="px-4 py-2 text-gray-600">Jumlah event terklasifikasi brute force</td><td class="px-4 py-2 text-gray-500">Brute force</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">7</td><td class="px-4 py-2 font-mono">requests_per_minute</td><td class="px-4 py-2 text-gray-600">total_requests ÷ durasi (menit)</td><td class="px-4 py-2 text-gray-500">Serangan volumetrik</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">8</td><td class="px-4 py-2 font-mono">port_diversity_ratio</td><td class="px-4 py-2 text-gray-600">unique_dest_ports ÷ total_requests</td><td class="px-4 py-2 text-gray-500">Port scan (→ 1.0)</td></tr>
+                <tr><td class="px-4 py-2 text-gray-400">9</td><td class="px-4 py-2 font-mono">fail_ratio</td><td class="px-4 py-2 text-gray-600">login_fails ÷ total_requests</td><td class="px-4 py-2 text-gray-500">Brute force (→ 1.0)</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4 text-xs">
+        <div class="bg-gray-50 rounded p-3 border border-gray-200">
+            <p class="font-semibold text-gray-600 mb-1">Contoh: browsing normal</p>
+            <p class="font-mono text-gray-500">[5, 1, 3, 0, 0, 0, 2.1, 0.20, 0.00]</p>
+        </div>
+        <div class="bg-gray-50 rounded p-3 border border-gray-200">
+            <p class="font-semibold text-gray-600 mb-1">Contoh: brute force SSH</p>
+            <p class="font-mono text-gray-500">[20, 1, 18, 20, 0, 0, 12.0, 0.05, 1.00]</p>
+        </div>
+        <div class="bg-gray-50 rounded p-3 border border-gray-200">
+            <p class="font-semibold text-gray-600 mb-1">Contoh: port scanning</p>
+            <p class="font-mono text-gray-500">[30, 30, 1, 0, 0, 0, 18.0, 1.00, 0.00]</p>
+        </div>
+    </div>
+</div>
+
+<!-- Pelatihan model dan metrik evaluasi -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="font-bold text-gray-800 mb-4">Pelatihan &amp; Pembaruan Model</h3>
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Paradigma</span>
+                <span class="font-medium text-gray-800">Unsupervised — tanpa data berlabel</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Jumlah pohon (n_estimators)</span>
+                <span class="font-mono text-gray-800">{{index $d "n_estimators"}}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Sampel per pohon (max_samples)</span>
+                <span class="font-mono text-gray-800">{{index $d "max_samples"}}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Kontaminasi</span>
+                <span class="font-mono text-gray-800">{{index $d "contamination"}}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Data pelatihan</span>
+                <span class="font-medium text-gray-800">Perilaku seluruh IP, 24 jam terakhir</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-b border-gray-100">
+                <span class="text-gray-500">Retraining otomatis</span>
+                <span class="font-medium text-gray-800">Setiap {{index $d "retrain_interval"}} syslog baru</span>
+            </div>
+            <div class="flex justify-between py-1.5">
+                <span class="text-gray-500">Penyimpanan model</span>
+                <span class="font-mono text-gray-800">isolation_forest.pkl + scaler.pkl</span>
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3">Kompleksitas pelatihan O(t·ψ·log ψ) dan inferensi O(t·log ψ)
+        dengan t = jumlah pohon dan ψ = max_samples — jauh lebih ringan dibandingkan pendekatan
+        deep learning, sehingga sesuai untuk server berspesifikasi sederhana.</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="font-bold text-gray-800 mb-4">Metrik Evaluasi Sistem</h3>
+        <div class="space-y-3 text-sm">
+            <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
+                <p class="font-mono text-xs text-gray-800 leading-6">
+                    Accuracy&nbsp;&nbsp;= (TP + TN) / (TP + TN + FP + FN)<br>
+                    Precision = TP / (TP + FP)<br>
+                    Recall&nbsp;&nbsp;&nbsp;&nbsp;= TP / (TP + FN)<br>
+                    F1-Score&nbsp;&nbsp;= 2 × (Precision × Recall) / (Precision + Recall)<br>
+                    FPR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= FP / (FP + TN)
+                </p>
+            </div>
+            <p class="text-xs text-gray-500">
+                TP = serangan terdeteksi benar; FP = trafik normal salah dituduh; TN = normal dikenali normal;
+                FN = serangan yang lolos. Evaluasi dilakukan dengan skenario trafik berlabel
+                (ground truth) melalui skrip <span class="font-mono">make evaluate</span>: trafik latar beragam,
+                brute force, port scan, dan flood menggunakan blok IP TEST-NET (RFC 5737).
+            </p>
+            <p class="text-xs text-gray-500">
+                Selain metrik klasifikasi, sistem diukur pada: waktu respons deteksi (syslog pertama → vonis
+                pertama), efektivitas blokir otomatis, waktu sinkronisasi blacklist antar node, serta
+                penggunaan CPU/RAM router dan server.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Teknologi -->
+<div class="bg-white rounded-lg shadow p-6">
+    <h3 class="font-bold text-gray-800 mb-4">Teknologi yang Digunakan</h3>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="bg-gray-50">
+                <tr class="text-left text-xs text-gray-500 uppercase">
+                    <th class="px-4 py-2">Komponen</th>
+                    <th class="px-4 py-2">Teknologi</th>
+                    <th class="px-4 py-2">Peran</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-xs text-gray-600">
+                <tr><td class="px-4 py-2 font-medium">Collector &amp; Dashboard</td><td class="px-4 py-2">Go (net/http, goroutine)</td><td class="px-4 py-2">Syslog receiver UDP 514, parser regex, distributor blacklist paralel, web administrasi</td></tr>
+                <tr><td class="px-4 py-2 font-medium">Machine Learning</td><td class="px-4 py-2">Python 3 + scikit-learn</td><td class="px-4 py-2">Ekstraksi fitur, StandardScaler, Isolation Forest, decision engine</td></tr>
+                <tr><td class="px-4 py-2 font-medium">Message Broker</td><td class="px-4 py-2">Redis (Stream + Pub/Sub)</td><td class="px-4 py-2">Antrean event asinkron antar layanan — collector tidak menunggu ML</td></tr>
+                <tr><td class="px-4 py-2 font-medium">Database</td><td class="px-4 py-2">TimescaleDB (PostgreSQL)</td><td class="px-4 py-2">Hypertable time-series untuk syslogs &amp; intrusion_results</td></tr>
+                <tr><td class="px-4 py-2 font-medium">Orkestrasi</td><td class="px-4 py-2">Docker Compose</td><td class="px-4 py-2">5 container terisolasi, komunikasi via jaringan internal Docker</td></tr>
+                <tr><td class="px-4 py-2 font-medium">Mitigasi</td><td class="px-4 py-2">RouterOS API (port 8728)</td><td class="px-4 py-2">Penambahan IP penyerang ke address-list <span class="font-mono">ids-blocked</span> (timeout 1 hari) di seluruh node</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

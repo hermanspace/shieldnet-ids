@@ -1,0 +1,108 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Dashboard statistik aktivitas per node MikroTik",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "orientation": "horizontal", "fillOpacity": 80 },
+      "title": "Jumlah Syslog Per Node (24 Jam Terakhir)",
+      "type": "barchart",
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT node_id AS \"Node\", COUNT(*) AS \"Syslog\" FROM syslogs WHERE time > NOW() - INTERVAL '24 hours' GROUP BY node_id ORDER BY COUNT(*) DESC",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "fixedColor": "red", "mode": "fixed" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "orientation": "horizontal", "fillOpacity": 80 },
+      "title": "Jumlah Intrusi Per Node (24 Jam Terakhir)",
+      "type": "barchart",
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT s.node_id AS \"Node\", COUNT(DISTINCT ir.source_ip) AS \"IP Terblokir\" FROM intrusion_results ir JOIN syslogs s ON ir.source_ip = s.source_ip WHERE ir.time > NOW() - INTERVAL '24 hours' AND ir.is_intrusion = true GROUP BY s.node_id ORDER BY COUNT(DISTINCT ir.source_ip) DESC",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "is_active"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-background"},
+            {"id": "mappings", "value": [{"type": "value", "options": {"true": {"text": "Aktif", "color": "green"}, "false": {"text": "Nonaktif", "color": "red"}}}]}
+          ]}
+        ]
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {},
+      "title": "Status Semua Node",
+      "type": "table",
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT node_id AS \"ID Node\", ip_address AS \"IP Address\", location AS \"Lokasi\", is_active AS \"Status\", created_at AS \"Terdaftar\" FROM mikrotik_nodes ORDER BY node_id",
+        "format": "table",
+        "refId": "A"
+      }]
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": { "tooltip": { "mode": "multi" } },
+      "title": "Aktivitas Syslog Per Node (Time Series)",
+      "type": "timeseries",
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT time_bucket('1 hour', time) AS time, node_id AS metric, COUNT(*) AS value FROM syslogs WHERE $__timeFilter(time) GROUP BY 1, 2 ORDER BY 1",
+        "format": "time_series",
+        "refId": "A"
+      }]
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": {} },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "id": 5,
+      "options": { "sortBy": [{"displayName": "Jumlah", "desc": true}] },
+      "title": "Top IP Sumber Per Node",
+      "type": "table",
+      "targets": [{
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT node_id AS \"Node\", source_ip AS \"IP Sumber\", COUNT(*) AS \"Jumlah\", COUNT(DISTINCT dest_port) AS \"Port Berbeda\", MAX(time) AS \"Terakhir Terdeteksi\" FROM syslogs WHERE time > NOW() - INTERVAL '24 hours' GROUP BY node_id, source_ip ORDER BY COUNT(*) DESC LIMIT 50",
+        "format": "table",
+        "refId": "A"
+      }]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "tags": ["IDS", "nodes"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Jakarta",
+  "title": "IDS - Statistik Per Node",
+  "uid": "ids-nodes",
+  "version": 1
+}

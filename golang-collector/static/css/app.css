@@ -1,0 +1,31 @@
+/* app.css - Custom CSS tambahan untuk ShieldNet IDS */
+/* Sebagian besar styling ditangani Tailwind CSS via CDN */
+
+/* Pastikan tabel bisa di-scroll horizontal di layar kecil */
+.table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Animasi loading untuk HTMX request */
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+/* Highlight baris tabel saat hover */
+tbody tr:hover {
+    background-color: rgba(243, 244, 246, 0.7);
+}
+
+/* Truncate teks panjang di kolom tabel */
+.cell-truncate {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

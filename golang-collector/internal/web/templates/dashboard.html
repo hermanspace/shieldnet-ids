@@ -1,0 +1,250 @@
+{{define "content"}}
+{{$data := .Data}}
+{{$stats := index $data "stats"}}
+{{$intrusions := index $data "recent_intrusions"}}
+
+<!-- Kartu statistik utama -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Syslog Hari Ini -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500">Syslog Hari Ini</p>
+                <p class="text-3xl font-bold text-gray-900 mt-1"
+                   id="stat-syslogs"
+                   hx-get="/api/stats"
+                   hx-trigger="every 30s"
+                   hx-swap="none">
+                    {{index $stats "total_syslogs"}}
+                </p>
+            </div>
+            <div class="bg-blue-100 p-3 rounded-full">
+                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Intrusi -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500">Intrusi Terdeteksi</p>
+                <p class="text-3xl font-bold text-red-600 mt-1">{{index $stats "total_intrusions"}}</p>
+            </div>
+            <div class="bg-red-100 p-3 rounded-full">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Node Aktif -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500">Node Aktif</p>
+                <p class="text-3xl font-bold text-green-600 mt-1">{{index $stats "active_nodes"}}</p>
+            </div>
+            <div class="bg-green-100 p-3 rounded-full">
+                <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- IP Diblokir -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500">IP Diblokir</p>
+                <p class="text-3xl font-bold text-orange-600 mt-1">{{index $stats "blocked_ips"}}</p>
+            </div>
+            <div class="bg-orange-100 p-3 rounded-full">
+                <svg class="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Grafik dan tabel intrusi terbaru -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Grafik intrusi per jam -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">Intrusi Per Jam (24 Jam Terakhir)</h3>
+            <span class="text-xs text-gray-400"
+                  hx-get="/api/stats"
+                  hx-trigger="every 30s"
+                  hx-swap="none"
+                  hx-on="htmx:afterRequest: refreshChart()">
+                Auto-refresh 30s
+            </span>
+        </div>
+        <canvas id="intrusionChart" height="200"></canvas>
+    </div>
+
+    <!-- Link ke Grafana -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Dashboard Visualisasi Lengkap</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            Gunakan Grafana untuk visualisasi statistik real-time yang lebih lengkap,
+            termasuk heatmap, histogram distribusi skor anomali, dan statistik per node.
+        </p>
+        <div class="space-y-3">
+            <a href="http://localhost:3000/d/ids-overview" target="_blank"
+               class="flex items-center p-3 bg-orange-50 rounded-md hover:bg-orange-100 transition-colors">
+                <svg class="h-5 w-5 text-orange-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-orange-700">Ringkasan Sistem IDS</p>
+                    <p class="text-xs text-orange-500">Statistik real-time keseluruhan</p>
+                </div>
+            </a>
+            <a href="http://localhost:3000/d/ids-intrusions" target="_blank"
+               class="flex items-center p-3 bg-red-50 rounded-md hover:bg-red-100 transition-colors">
+                <svg class="h-5 w-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-red-700">Detail Deteksi Intrusi</p>
+                    <p class="text-xs text-red-500">Distribusi skor anomali & akurasi</p>
+                </div>
+            </a>
+            <a href="http://localhost:3000/d/ids-nodes" target="_blank"
+               class="flex items-center p-3 bg-green-50 rounded-md hover:bg-green-100 transition-colors">
+                <svg class="h-5 w-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-green-700">Statistik Per Node</p>
+                    <p class="text-xs text-green-500">Aktivitas per router MikroTik</p>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Tabel 10 intrusi terbaru -->
+<div class="bg-white rounded-lg shadow">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-800">10 Intrusi Terbaru</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Sumber</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Skor Anomali</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keyakinan</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {{if $intrusions}}
+                {{range $intrusions}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {{.Time.Format "02/01 15:04:05"}}
+                    </td>
+                    <td class="px-6 py-4 text-sm font-mono font-medium text-gray-900">
+                        {{.SourceIP}}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        {{printf "%.4f" .AnomalyScore}}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        {{printf "%.1f%%" (mul .Confidence 100.0)}}
+                    </td>
+                    <td class="px-6 py-4">
+                        {{if eq .ActionTaken "block"}}
+                        <span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">Blokir</span>
+                        {{else if eq .ActionTaken "monitor"}}
+                        <span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">Monitor</span>
+                        {{else}}
+                        <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Izinkan</span>
+                        {{end}}
+                    </td>
+                    <td class="px-6 py-4">
+                        {{if .Distributed}}
+                        <span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Terdistribusi</span>
+                        {{else}}
+                        <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">Belum</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr>
+                    <td colspan="6" class="px-6 py-8 text-center text-gray-400 text-sm">
+                        Belum ada data intrusi
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// Muat dan tampilkan grafik intrusi per jam menggunakan Chart.js
+async function loadChart() {
+    const response = await fetch('/api/intrusions/chart');
+    const data = await response.json();
+
+    const labels = data ? data.map(d => d.hour) : [];
+    const counts = data ? data.map(d => d.count) : [];
+
+    const ctx = document.getElementById('intrusionChart').getContext('2d');
+    window.intrusionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Jumlah Intrusi',
+                data: counts,
+                borderColor: 'rgb(239, 68, 68)',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+            }
+        }
+    });
+}
+
+// Refresh grafik saat HTMX melakukan polling
+async function refreshChart() {
+    const response = await fetch('/api/intrusions/chart');
+    const data = await response.json();
+    if (window.intrusionChart && data) {
+        window.intrusionChart.data.labels = data.map(d => d.hour);
+        window.intrusionChart.data.datasets[0].data = data.map(d => d.count);
+        window.intrusionChart.update();
+    }
+}
+
+loadChart();
+</script>
+{{end}}

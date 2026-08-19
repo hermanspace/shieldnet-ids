@@ -1,0 +1,167 @@
+{{define "content"}}
+{{$data := .Data}}
+{{$activeTab := index $data "active_tab"}}
+
+<!-- Catatan penting -->
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <h4 class="text-sm font-semibold text-blue-800 mb-2">Catatan Penting</h4>
+    <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
+        <li>IP di <strong>whitelist</strong> TIDAK akan dianalisis ML dan TIDAK akan pernah diblokir</li>
+        <li>IP di <strong>blacklist</strong> LANGSUNG diblokir di semua node tanpa menunggu analisis ML</li>
+        <li>Aturan manual ini memiliki prioritas lebih tinggi dari hasil machine learning</li>
+    </ul>
+</div>
+
+<!-- Tab navigasi -->
+<div class="border-b border-gray-200 mb-6">
+    <nav class="flex space-x-8">
+        <a href="/access-list?tab=whitelist"
+           class="py-2 px-1 text-sm font-medium border-b-2 transition-colors
+                  {{if eq $activeTab "whitelist"}}border-blue-500 text-blue-600{{else}}border-transparent text-gray-500 hover:text-gray-700{{end}}">
+            Whitelist
+            <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                {{len (index $data "whitelist")}}
+            </span>
+        </a>
+        <a href="/access-list?tab=blacklist"
+           class="py-2 px-1 text-sm font-medium border-b-2 transition-colors
+                  {{if eq $activeTab "blacklist"}}border-red-500 text-red-600{{else}}border-transparent text-gray-500 hover:text-gray-700{{end}}">
+            Blacklist
+            <span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                {{len (index $data "blacklist")}}
+            </span>
+        </a>
+    </nav>
+</div>
+
+<!-- Form tambah IP -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="text-base font-semibold text-gray-800 mb-4">
+        Tambah IP ke {{if eq $activeTab "whitelist"}}Whitelist{{else}}Blacklist{{end}}
+    </h3>
+    <form method="POST" action="/access-list/add"
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <input type="hidden" name="list_type" value="{{$activeTab}}">
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">IP Address <span class="text-red-500">*</span></label>
+            <input type="text" name="ip_address" required placeholder="Contoh: 192.168.1.100"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Alasan</label>
+            <input type="text" name="reason" placeholder="Alasan penambahan..."
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Kadaluarsa (opsional)</label>
+            <input type="datetime-local" name="expires_at"
+                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="flex items-end">
+            <button type="submit"
+                    class="w-full {{if eq $activeTab "whitelist"}}bg-green-600 hover:bg-green-700{{else}}bg-red-600 hover:bg-red-700{{end}} text-white text-sm font-medium py-2 px-4 rounded transition-colors">
+                Tambah ke {{if eq $activeTab "whitelist"}}Whitelist{{else}}Blacklist{{end}}
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Tabel daftar IP -->
+<div class="bg-white rounded-lg shadow">
+    {{if eq $activeTab "whitelist"}}
+    {{$whitelist := index $data "whitelist"}}
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-sm font-medium text-gray-700">Daftar IP Whitelist ({{len $whitelist}} entri)</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alasan</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditambahkan Oleh</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kadaluarsa</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dibuat</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                {{if $whitelist}}
+                {{range $whitelist}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-mono font-medium text-green-700">{{.IPAddress}}</td>
+                    <td class="px-4 py-3 text-gray-600">{{if .Reason}}{{.Reason}}{{else}}-{{end}}</td>
+                    <td class="px-4 py-3 text-gray-500">{{.AddedBy}}</td>
+                    <td class="px-4 py-3 text-gray-500">
+                        {{if .ExpiresAt}}{{.ExpiresAt.Format "02/01/2006 15:04"}}{{else}}Permanen{{end}}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500">{{.CreatedAt.Format "02/01/2006"}}</td>
+                    <td class="px-4 py-3">
+                        <form method="POST" action="/access-list/delete">
+                            <input type="hidden" name="id" value="{{.ID}}">
+                            <input type="hidden" name="list_type" value="whitelist">
+                            <button type="submit"
+                                    class="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                                    onclick="return confirm('Hapus {{.IPAddress}} dari whitelist?')">
+                                Hapus
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">Whitelist kosong</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    {{$blacklist := index $data "blacklist"}}
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-sm font-medium text-gray-700">Daftar IP Blacklist ({{len $blacklist}} entri)</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Alasan</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditambahkan Oleh</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kadaluarsa</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dibuat</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                {{if $blacklist}}
+                {{range $blacklist}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-mono font-medium text-red-700">{{.IPAddress}}</td>
+                    <td class="px-4 py-3 text-gray-600">{{if .Reason}}{{.Reason}}{{else}}-{{end}}</td>
+                    <td class="px-4 py-3 text-gray-500">{{.AddedBy}}</td>
+                    <td class="px-4 py-3 text-gray-500">
+                        {{if .ExpiresAt}}{{.ExpiresAt.Format "02/01/2006 15:04"}}{{else}}Permanen{{end}}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500">{{.CreatedAt.Format "02/01/2006"}}</td>
+                    <td class="px-4 py-3">
+                        <form method="POST" action="/access-list/delete">
+                            <input type="hidden" name="id" value="{{.ID}}">
+                            <input type="hidden" name="list_type" value="blacklist">
+                            <button type="submit"
+                                    class="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                                    onclick="return confirm('Hapus {{.IPAddress}} dari blacklist?')">
+                                Hapus
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">Blacklist kosong</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+</div>
+{{end}}
