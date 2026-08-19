@@ -662,3 +662,19 @@ func DeleteAllAppSettings() error {
 	_, err := DB.Exec(context.Background(), "DELETE FROM app_settings")
 	return err
 }
+
+// UpdateUserPassword mengganti password (hash bcrypt) seorang pengguna berdasarkan ID.
+// Dipakai fitur reset password oleh admin dari halaman Manajemen User.
+func UpdateUserPassword(id int, passwordHash string) error {
+	_, err := DB.Exec(context.Background(),
+		"UPDATE users SET password = $1 WHERE id = $2", passwordHash, id)
+	return err
+}
+
+// UpdateUserPasswordByUsername mengganti password (hash bcrypt) berdasarkan username.
+// Dipakai fitur ubah password mandiri oleh pengguna yang sedang login.
+func UpdateUserPasswordByUsername(username, passwordHash string) error {
+	_, err := DB.Exec(context.Background(),
+		"UPDATE users SET password = $1 WHERE username = $2", passwordHash, username)
+	return err
+}

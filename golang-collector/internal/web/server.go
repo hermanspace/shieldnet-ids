@@ -88,6 +88,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/syslogs", auth.RequireLogin(h.Syslogs))
 	mux.HandleFunc("/intrusions", auth.RequireLogin(h.Intrusions))
 	mux.HandleFunc("/about", auth.RequireLogin(h.About))
+	mux.HandleFunc("/profile", auth.RequireLogin(h.Profile))
+	mux.HandleFunc("/profile/password", auth.RequireLogin(h.ChangeOwnPassword))
 
 	// Route yang memerlukan minimal role operator
 	mux.HandleFunc("/nodes", auth.RequireOperator(h.Nodes))
@@ -108,6 +110,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/settings/reset", auth.RequireAdmin(h.ResetSettings))
 	mux.HandleFunc("/users", auth.RequireAdmin(h.Users))
 	mux.HandleFunc("/users/add", auth.RequireAdmin(h.AddUser))
+	mux.HandleFunc("/users/reset-password", auth.RequireAdmin(h.ResetUserPassword))
 	mux.HandleFunc("/users/toggle", auth.RequireAdmin(h.ToggleUser))
 	mux.HandleFunc("/users/delete", auth.RequireAdmin(h.DeleteUser))
 

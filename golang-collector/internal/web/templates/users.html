@@ -102,6 +102,17 @@
                                     {{if .IsActive}}Nonaktifkan{{else}}Aktifkan{{end}}
                                 </button>
                             </form>
+                            <form method="POST" action="/users/reset-password" class="flex gap-1"
+                                  onsubmit="return confirm('Reset password user {{.Username}}?')">
+                                <input type="hidden" name="id" value="{{.ID}}">
+                                <input type="password" name="new_password" placeholder="Password baru"
+                                       required minlength="8" autocomplete="new-password"
+                                       class="w-28 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <button type="submit"
+                                        class="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded">
+                                    Reset
+                                </button>
+                            </form>
                             {{if ne .Username $.Username}}
                             <form method="POST" action="/users/delete">
                                 <input type="hidden" name="id" value="{{.ID}}">

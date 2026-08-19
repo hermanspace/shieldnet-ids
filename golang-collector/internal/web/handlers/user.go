@@ -98,6 +98,52 @@ func (h *Handlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/users", http.StatusFound)
 }
 
+// ResetUserPassword memungkinkan admin mengganti password pengguna mana pun
+// dari halaman Manajemen User tanpa perlu mengetahui password lamanya.
+func (h *Handlers) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/users", http.StatusFound)
+		return
+	}
+
+	id, err := strconv.Atoi(r.FormValue("id"))
+	if err != nil {
+		http.Redirect(w, r, "/users", http.StatusFound)
+		return
+	}
+
+	newPassword := r.FormValue("new_password")
+	if len(newPassword) < 8 {
+		h.renderUsers(w, r, "Password baru minimal 8 karakter.")
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		h.renderUsers(w, r, "Gagal memproses password baru.")
+		return
+	}
+
+	if err := database.UpdateUserPassword(id, string(hashed)); err != nil {
+		h.renderUsers(w, r, "Gagal menyimpan password baru.")
+		return
+	}
+	h.renderUsers(w, r, "Password berhasil direset.")
+}
+
+// renderUsers merender halaman manajemen user dengan pesan flash.
+func (h *Handlers) renderUsers(w http.ResponseWriter, r *http.Request, flash string) {
+	users, err := database.GetAllUsers()
+	if err != nil {
+		users = nil
+	}
+	h.render(w, r, "users.html", PageData{
+		Title: "Manajemen Pengguna",
+		Flash: flash,
+		Data:  users,
+	})
+}
+
 // Login menampilkan halaman login dan memproses autentikasi pengguna.
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	// Jika sudah login, langsung ke dashboard
