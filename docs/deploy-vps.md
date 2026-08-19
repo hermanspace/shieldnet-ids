@@ -88,6 +88,8 @@ sudo ufw allow OpenSSH
 # Dashboard web — batasi ke IP admin bila memungkinkan:
 sudo ufw allow 8080/tcp
 # (lebih ketat) sudo ufw allow from IP_RUMAH_ANDA to any port 8080 proto tcp
+# Catatan: bila memakai Cloudflare + Caddy (Bagian 9), port 8080 nantinya
+# DITUTUP dan diganti 80/443 — aturan ini hanya untuk akses awal.
 
 # Syslog UDP — HANYA dari IP setiap router MikroTik/CHR:
 sudo ufw allow from IP_CHR_1 to any port 514 proto udp
@@ -246,10 +248,40 @@ make clean         # HATI-HATI: menghapus container + volume + SEMUA DATA
 
 ---
 
-## 9. (Opsional) HTTPS untuk Dashboard
+## 9. HTTPS via Cloudflare + Caddy (port standar 80/443)
 
-Untuk akses dashboard melalui domain dengan sertifikat otomatis, pasang Caddy
-di VPS sebagai reverse proxy:
+Arsitektur yang disarankan: aplikasi Go tetap berjalan di port internalnya
+(8080, dikunci ke loopback), lalu **Caddy** berjalan di host sebagai reverse
+proxy pada port 80/443. Cloudflare (proxy aktif / awan oranye) berada di
+depan Caddy.
+
+```
+Browser ⇆ Cloudflare (443) ⇆ Caddy di VPS (80/443) ⇆ 127.0.0.1:8080 (dashboard)
+```
+
+### 9.1 DNS di Cloudflare
+
+1. Buat **A record**, mis. `ids.domain-anda.com` → IP VPS, **Proxy status: Proxied** (awan oranye).
+2. Menu **SSL/TLS → Overview**: pilih mode **Full (strict)**.
+
+### 9.2 Buat Cloudflare Origin Certificate
+
+Origin Certificate adalah sertifikat gratis 15 tahun yang dipercaya oleh
+Cloudflare — paling stabil untuk origin di belakang proxy (tidak bergantung
+perpanjangan Let's Encrypt).
+
+1. Cloudflare → **SSL/TLS → Origin Server → Create Certificate** (default RSA,
+   hostname `ids.domain-anda.com`, validitas 15 tahun).
+2. Simpan kedua bagiannya di VPS:
+
+```bash
+sudo mkdir -p /etc/caddy/certs
+sudo nano /etc/caddy/certs/origin.pem      # tempel "Origin Certificate"
+sudo nano /etc/caddy/certs/origin-key.pem  # tempel "Private Key"
+sudo chmod 600 /etc/caddy/certs/origin-key.pem
+```
+
+### 9.3 Pasang dan konfigurasi Caddy
 
 ```bash
 sudo apt install -y caddy
@@ -259,17 +291,55 @@ Isi `/etc/caddy/Caddyfile`:
 
 ```
 ids.domain-anda.com {
+    tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin-key.pem
     reverse_proxy localhost:8080
 }
 ```
 
 ```bash
 sudo systemctl reload caddy
-sudo ufw allow 80,443/tcp
 ```
 
-Setelah itu port 8080 bisa ditutup dari publik
-(`sudo ufw delete allow 8080/tcp`) sehingga dashboard hanya diakses via HTTPS.
+### 9.4 Kunci dashboard ke loopback dan atur firewall
+
+Edit `.env`, ubah:
+
+```
+WEB_BIND=127.0.0.1
+```
+
+Terapkan tanpa mengganggu layanan lain:
+
+```bash
+docker compose up -d golang-collector
+```
+
+Firewall — buka 80/443, tutup 8080:
+
+```bash
+sudo ufw allow 80,443/tcp
+sudo ufw delete allow 8080/tcp
+```
+
+Dashboard kini hanya bisa diakses melalui `https://ids.domain-anda.com`.
+
+(Opsional, lebih ketat lagi: batasi 80/443 hanya dari rentang IP Cloudflare —
+daftar resminya di https://www.cloudflare.com/ips/ — sehingga origin tidak
+bisa diakses langsung meski IP VPS diketahui.)
+
+### 9.5 PENTING: syslog dan WireGuard TIDAK lewat Cloudflare
+
+Cloudflare hanya mem-proxy trafik HTTP/HTTPS. Karena itu:
+
+- **Target remote syslog di router tetap IP VPS asli** (bukan nama domain!).
+  Bila domain di-proxy (oranye), nama domain akan mengarah ke IP Cloudflare
+  dan syslog tidak akan pernah sampai.
+- **Endpoint WireGuard** (bila dipakai untuk node NAT) juga harus IP VPS asli.
+- Aturan UFW port 514/udp dari IP router tidak berubah.
+
+Bila ingin memakai nama domain untuk keperluan non-HTTP, buat subdomain
+terpisah dengan **Proxy status: DNS only** (awan abu-abu), mis.
+`syslog.domain-anda.com` → IP VPS.
 
 ---
 
@@ -284,3 +354,5 @@ Setelah itu port 8080 bisa ditutup dari publik
 - [ ] Verifikasi: syslog masuk ber-`node_id` benar, blokir manual sampai ke address-list semua node
 - [ ] `make test` / `make evaluate` berjalan baik
 - [ ] Backup database terjadwal
+- [ ] HTTPS: Cloudflare Full (strict) + Origin Cert + Caddy 80/443, `WEB_BIND=127.0.0.1`, port 8080 ditutup
+- [ ] Target syslog & endpoint WireGuard memakai IP VPS asli (bukan domain yang di-proxy Cloudflare)
