@@ -59,13 +59,15 @@
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lokasi</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status API</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" title="Sampel terakhir via RouterOS API /system/resource/print">CPU / RAM Router</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktif</th>
                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200 text-sm">
-                {{if .Data}}
-                {{range .Data}}
+                {{$res := index .Data "res"}}
+                {{if index .Data "nodes"}}
+                {{range index .Data "nodes"}}
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 font-medium text-gray-900">{{.NodeID}}</td>
                     <td class="px-4 py-3 font-mono text-blue-600">{{.IPAddress}}</td>
@@ -77,6 +79,14 @@
                         hx-trigger="load"
                         hx-swap="innerHTML">
                         <span class="text-xs text-gray-400">Memeriksa...</span>
+                    </td>
+                    <!-- Beban router: CPU % dan pemakaian memori (pengganti pemantauan SNMP) -->
+                    <td class="px-4 py-3 text-xs">
+                        {{with index $res .NodeID}}
+                        <div class="font-mono text-gray-800">CPU {{.CPULoad}}%</div>
+                        <div class="font-mono text-gray-500">RAM {{memPct .FreeMemory .TotalMemory}}% dari {{mb .TotalMemory}} MB</div>
+                        <div class="text-gray-400">{{.BoardName}} · v{{.Version}} · {{.Time.Format "15:04:05"}}</div>
+                        {{else}}<span class="text-gray-400">belum ada sampel</span>{{end}}
                     </td>
                     <td class="px-4 py-3">
                         {{if .IsActive}}

@@ -364,6 +364,45 @@ terpisah dengan **Proxy status: DNS only** (awan abu-abu), mis.
 
 ---
 
+## 10. Mengukur beban router sebelum/sesudah sistem (CPU & memori)
+
+Collector mengambil sampel `/system/resource/print` (cpu-load, free-memory,
+total-memory) dari setiap node aktif melalui RouterOS API setiap
+`RESOURCE_POLL_INTERVAL` detik (bawaan 30; 0 = nonaktif) dan menyimpannya ke
+tabel `node_resources`. Metriknya setara HOST-RESOURCES-MIB (RFC 2790) tanpa
+perlu membuka port SNMP. Data tampil di halaman *Node MikroTik* dan dashboard
+Grafana *IDS - Nodes* (panel CPU/RAM router + tabel ringkasan).
+
+Prosedur pengukuran *sebelum vs sesudah* (ISO/IEC 25023 *resource utilization*):
+
+1. Pastikan NTP aktif di router dan VPS, lalu cek sampel sudah masuk:
+   ```bash
+   docker exec ids-timescaledb psql -U ids_user -d ids_thesis -c "SELECT node_id, max(time) FROM node_resources GROUP BY 1"
+   ```
+2. Fase **sebelum** — matikan pengiriman log di setiap router (poller API tetap berjalan):
+   ```
+   /system logging disable [find action=remote]
+   ```
+   lalu rekam 5 menit:
+   ```bash
+   make measure LABEL=sebelum DURATION=300
+   ```
+3. Fase **sesudah** — aktifkan kembali log dan jalankan simulasi di terminal lain:
+   ```
+   /system logging enable [find action=remote]
+   ```
+   ```bash
+   make test
+   make measure LABEL=sesudah DURATION=300
+   ```
+4. Bandingkan (rata-rata, simpangan baku, maksimum per node, dan selisihnya):
+   ```bash
+   make measure-compare A=sebelum B=sesudah
+   ```
+
+Ulangi minimal 3 kali per fase agar rata-rata stabil; hasilnya bisa dimasukkan ke
+laporan sebagai tabel beban router sebelum/sesudah.
+
 ## Ringkasan Checklist Production
 
 - [ ] `.env` diisi: password DB, `SESSION_SECRET`, password Grafana, kredensial API MikroTik

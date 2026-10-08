@@ -761,3 +761,76 @@ func GetIntrusionDetail(sourceIP string, at time.Time) (*IntrusionResult, error)
 	}
 	return &r, nil
 }
+
+// =============================================================================
+// Sumber daya router (pengganti rancangan SNMP): sampel CPU/memori per node
+// =============================================================================
+
+// NodeResource adalah satu sampel sumber daya router dari /system/resource/print.
+type NodeResource struct {
+	Time        time.Time
+	NodeID      string
+	CPULoad     int   // persen
+	FreeMemory  int64 // byte
+	TotalMemory int64 // byte
+	CPUCount    int
+	Uptime      string
+	Version     string
+	BoardName   string
+}
+
+// EnsureNodeResourcesTable membuat tabel node_resources (hypertable bila
+// TimescaleDB tersedia). Aman dipanggil berulang.
+func EnsureNodeResourcesTable() error {
+	ctx := context.Background()
+	_, err := DB.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS node_resources (
+			time         TIMESTAMPTZ NOT NULL,
+			node_id      TEXT NOT NULL,
+			cpu_load     INTEGER,
+			free_memory  BIGINT,
+			total_memory BIGINT,
+			cpu_count    INTEGER,
+			uptime       TEXT,
+			version      TEXT,
+			board_name   TEXT
+		)`)
+	if err != nil {
+		return err
+	}
+	_, _ = DB.Exec(ctx, `SELECT create_hypertable('node_resources', 'time', if_not_exists => TRUE)`)
+	_, _ = DB.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_node_resources_node_time ON node_resources (node_id, time DESC)`)
+	return nil
+}
+
+// InsertNodeResource menyimpan satu sampel sumber daya.
+func InsertNodeResource(r NodeResource) error {
+	_, err := DB.Exec(context.Background(), `
+		INSERT INTO node_resources (time, node_id, cpu_load, free_memory, total_memory, cpu_count, uptime, version, board_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		r.Time, r.NodeID, r.CPULoad, r.FreeMemory, r.TotalMemory, r.CPUCount, r.Uptime, r.Version, r.BoardName)
+	return err
+}
+
+// GetLatestNodeResources mengembalikan sampel terakhir tiap node (untuk halaman node).
+func GetLatestNodeResources() (map[string]NodeResource, error) {
+	rows, err := DB.Query(context.Background(), `
+		SELECT DISTINCT ON (node_id) time, node_id, COALESCE(cpu_load,0), COALESCE(free_memory,0),
+		       COALESCE(total_memory,0), COALESCE(cpu_count,0), COALESCE(uptime,''), COALESCE(version,''), COALESCE(board_name,'')
+		FROM node_resources
+		WHERE time > NOW() - interval '1 hour'
+		ORDER BY node_id, time DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]NodeResource{}
+	for rows.Next() {
+		var r NodeResource
+		if err := rows.Scan(&r.Time, &r.NodeID, &r.CPULoad, &r.FreeMemory, &r.TotalMemory, &r.CPUCount, &r.Uptime, &r.Version, &r.BoardName); err != nil {
+			return nil, err
+		}
+		out[r.NodeID] = r
+	}
+	return out, nil
+}

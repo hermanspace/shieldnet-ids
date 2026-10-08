@@ -70,6 +70,15 @@ evaluate:
 	@echo ">> Menjalankan evaluasi kuantitatif sistem deteksi..."
 	@docker exec -i ids-python python3 - < evaluation/evaluate.py
 
+## measure: Rekam beban CPU/RAM router (via RouterOS API) untuk satu fase, mis. LABEL=sebelum DURATION=300
+measure:
+	@echo ">> Merekam beban router fase '$(or $(LABEL),sesudah)' selama $(or $(DURATION),300) detik..."
+	@docker exec -i ids-python python3 - $(or $(LABEL),sesudah) $(or $(DURATION),300) < evaluation/measure_router.py
+
+## measure-compare: Bandingkan dua fase pengukuran beban router, mis. A=sebelum B=sesudah
+measure-compare:
+	@docker exec -i ids-python python3 - compare $(or $(A),sebelum) $(or $(B),sesudah) < evaluation/measure_router.py
+
 ## status: Cek status semua container yang berjalan
 status:
 	@echo ">> Status container:"

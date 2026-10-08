@@ -37,6 +37,7 @@ type Config struct {
 
 	// Parameter analisis
 	AnalysisWindowMinutes int
+	ResourcePollInterval  int // detik; 0 = nonaktif
 	ModelRetrainInterval  int
 
 	// MikroTik default
@@ -72,6 +73,7 @@ func Load() *Config {
 
 		AnalysisWindowMinutes: getEnvInt("ANALYSIS_WINDOW_MINUTES", 10),
 		ModelRetrainInterval:  getEnvInt("MODEL_RETRAIN_INTERVAL", 100),
+		ResourcePollInterval:  getEnvInt("RESOURCE_POLL_INTERVAL", 30),
 
 		MikrotikDefaultAPIPort: getEnvInt("MIKROTIK_DEFAULT_API_PORT", 8728),
 		MikrotikDefaultUser:    getEnv("MIKROTIK_DEFAULT_USERNAME", "admin"),

@@ -187,6 +187,14 @@ func templateFuncs() template.FuncMap {
 				return "text-gray-700"
 			}
 		},
+		// memPct: persentase memori terpakai router; mb: byte -> megabyte
+		"memPct": func(free, total int64) int {
+			if total <= 0 {
+				return 0
+			}
+			return int(100 * (total - free) / total)
+		},
+		"mb": func(b int64) int64 { return b / 1048576 },
 		"gt": func(a, b int) bool { return a > b },
 		"lt": func(a, b int) bool { return a < b },
 		"ge": func(a, b int) bool { return a >= b },

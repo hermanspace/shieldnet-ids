@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"thesis-ids/golang-collector/config"
 	"thesis-ids/golang-collector/internal/auth"
@@ -39,6 +40,10 @@ func main() {
 	// Tambahkan kolom fitur hasil olahan pada database lama (revisi penguji)
 	if err := database.EnsureSchemaUpgrades(); err != nil {
 		log.Printf("Peringatan: gagal memperbarui skema intrusion_results: %v", err)
+	}
+	// Tabel sampel sumber daya router (pengganti rancangan SNMP)
+	if err := database.EnsureNodeResourcesTable(); err != nil {
+		log.Printf("Peringatan: gagal menyiapkan tabel node_resources: %v", err)
 	}
 
 	// Inisialisasi session store untuk manajemen login
@@ -88,6 +93,9 @@ func main() {
 			log.Fatalf("Web server berhenti: %v", err)
 		}
 	}()
+
+	// Pantau CPU/memori setiap router aktif secara berkala melalui RouterOS API
+	mikrotik.StartResourcePoller(time.Duration(cfg.ResourcePollInterval) * time.Second)
 
 	log.Println("Sistem IDS berjalan. Tekan Ctrl+C untuk berhenti.")
 

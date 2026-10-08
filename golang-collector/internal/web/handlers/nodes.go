@@ -16,10 +16,18 @@ func (h *Handlers) Nodes(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		nodes = nil
 	}
+	// Sampel CPU/memori terakhir tiap node (poller RouterOS API, 1 jam terakhir)
+	res, err := database.GetLatestNodeResources()
+	if err != nil {
+		res = map[string]database.NodeResource{}
+	}
 
 	h.render(w, r, "nodes.html", PageData{
 		Title: "Manajemen Node MikroTik",
-		Data:  nodes,
+		Data: map[string]interface{}{
+			"nodes": nodes,
+			"res":   res,
+		},
 	})
 }
 
