@@ -123,6 +123,16 @@ class IDSModel:
 
         return is_intrusion, float(anomaly_score), float(confidence)
 
+    def transform_features(self, features: np.ndarray) -> Optional[np.ndarray]:
+        """
+        mengembalikan versi ternormalisasi (StandardScaler) dari vektor fitur,
+        memakai scaler yang sama dengan saat pelatihan. Dipakai untuk menampilkan
+        tahap "data diolah" pada dashboard (revisi penguji: data mentah → data olahan).
+        """
+        if self.scaler is None:
+            return None
+        return self.scaler.transform(features.reshape(1, -1))[0]
+
     def determine_action(self, is_intrusion: bool, anomaly_score: float, confidence: float) -> str:
         """
         menentukan aksi yang harus diambil berdasarkan hasil prediksi.

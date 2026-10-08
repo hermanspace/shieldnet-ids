@@ -14,7 +14,7 @@ import config
 from modules.consumer import SyslogConsumer
 from modules.database import wait_for_db, fetch_syslogs_for_analysis, fetch_training_data, count_syslogs_since
 from modules.model import IDSModel
-from modules.preprocessor import extract_features
+from modules.preprocessor import extract_features, FEATURE_NAMES
 from modules.publisher import ResultPublisher
 
 # Konfigurasi logging dengan format yang jelas dan informatif
@@ -69,8 +69,19 @@ def process_syslog_event(fields: dict):
     else:
         logger.debug(f"[NORMAL] IP={source_ip} skor={anomaly_score:.4f}")
 
+    # Susun 9 fitur (mentah dan ternormalisasi) agar tahap "data diolah" dapat
+    # ditampilkan pada dashboard bersama log mentahnya (revisi penguji)
+    feature_map = {name: round(float(v), 4) for name, v in zip(FEATURE_NAMES, features)}
+    scaled = ids_model.transform_features(features)
+    scaled_map = ({name: round(float(v), 4) for name, v in zip(FEATURE_NAMES, scaled)}
+                  if scaled is not None else {})
+
     # Publikasi hasil ke Redis agar Golang bisa mengambil tindakan
-    publisher.publish_result(source_ip, is_intrusion, anomaly_score, confidence, action)
+    publisher.publish_result(
+        source_ip, is_intrusion, anomaly_score, confidence, action,
+        features=feature_map, features_scaled=scaled_map,
+        record_count=len(records), window_minutes=config.ANALYSIS_WINDOW_MINUTES,
+    )
 
     # Cek apakah model perlu dilatih ulang berdasarkan jumlah data baru
     check_and_retrain()

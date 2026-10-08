@@ -36,6 +36,10 @@ func main() {
 	if err := database.EnsureSettingsTable(); err != nil {
 		log.Printf("Peringatan: gagal menyiapkan tabel app_settings: %v", err)
 	}
+	// Tambahkan kolom fitur hasil olahan pada database lama (revisi penguji)
+	if err := database.EnsureSchemaUpgrades(); err != nil {
+		log.Printf("Peringatan: gagal memperbarui skema intrusion_results: %v", err)
+	}
 
 	// Inisialisasi session store untuk manajemen login
 	auth.InitSessionStore(cfg.SessionSecret)
@@ -143,6 +147,11 @@ func handleAnalysisResult(result redisclient.AnalysisResult) {
 		IsIntrusion:  result.IsIntrusion,
 		Confidence:   result.Confidence,
 		ActionTaken:  result.Action,
+		// Tahap pengolahan data (revisi penguji: data mentah → data olahan)
+		Features:       result.Features,
+		FeaturesScaled: result.FeaturesScaled,
+		RecordCount:    result.RecordCount,
+		WindowMinutes:  result.WindowMinutes,
 	}
 	if err := database.InsertIntrusionResult(dbResult); err != nil {
 		log.Printf("Gagal simpan hasil analisis: %v", err)

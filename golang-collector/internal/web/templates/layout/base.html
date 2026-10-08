@@ -95,12 +95,11 @@
                     </a>
                 </div>
 
-                <!-- Tautan ke Grafana — DISEMBUNYIKAN sementara (belum diperlukan
-                     untuk sidang, jangan dihapus). Aktifkan kembali dengan
-                     mengganti kondisi menjadi true. -->
-                {{if false}}
+                <!-- Tautan ke Grafana (revisi penguji: data ditampilkan di Grafana).
+                     URL diambil dari env GRAFANA_URL agar berlaku di lokal maupun produksi. -->
+                {{if true}}
                 <div class="pt-4 border-t border-gray-700">
-                    <a href="http://localhost:3000" target="_blank"
+                    <a href="{{.GrafanaURL}}/dashboards" target="_blank"
                        class="flex items-center px-3 py-2 rounded-md text-sm font-medium text-orange-400 hover:bg-gray-700 hover:text-orange-300 transition-colors">
                         <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

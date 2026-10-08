@@ -292,13 +292,34 @@ Isi `/etc/caddy/Caddyfile`:
 ```
 ids.domain-anda.com {
     tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin-key.pem
-    reverse_proxy localhost:8080
+
+    # Grafana dilayani di sub-path /grafana (hanya terikat 127.0.0.1:3000 di compose)
+    handle /grafana* {
+        reverse_proxy localhost:3000
+    }
+
+    handle {
+        reverse_proxy localhost:8080
+    }
 }
 ```
 
 ```bash
 sudo systemctl reload caddy
 ```
+
+Agar tautan Grafana dari dashboard IDS mengarah ke sub-path tersebut, isi di `.env`
+produksi lalu `docker compose up -d` ulang:
+
+```
+GRAFANA_URL=https://ids.domain-anda.com/grafana
+GRAFANA_ROOT_URL=https://ids.domain-anda.com/grafana/
+GRAFANA_SUB_PATH=true
+```
+
+Grafana memakai login terpisah (bawaan `admin` / `GRAFANA_ADMIN_PASSWORD` di `.env`).
+Dashboard yang tersedia otomatis (provisioning): *IDS - Overview*, *IDS - Intrusions*,
+*IDS - Nodes*, dan *IDS - Data Mentah & Olahan*.
 
 ### 9.4 Kunci dashboard ke loopback dan atur firewall
 

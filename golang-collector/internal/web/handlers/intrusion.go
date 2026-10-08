@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"thesis-ids/golang-collector/internal/auth"
 	"thesis-ids/golang-collector/internal/database"
@@ -143,4 +144,97 @@ func parseIntParamStr(s string, defaultVal int) int {
 		return n
 	}
 	return defaultVal
+}
+
+// featureInfo menjelaskan tiap fitur agar halaman detail mudah dipahami.
+type featureInfo struct {
+	Key       string
+	Label     string
+	Deskripsi string
+	Indikator string
+	Raw       float64
+	Scaled    float64
+	HasScaled bool
+}
+
+// featureCatalog adalah urutan & keterangan 9 fitur — harus sama dengan
+// FEATURE_NAMES pada python-analyst/modules/preprocessor.py.
+var featureCatalog = []featureInfo{
+	{Key: "total_requests", Label: "Total aktivitas", Deskripsi: "Jumlah seluruh log dari IP ini dalam jendela analisis", Indikator: "Flood / DoS"},
+	{Key: "unique_dest_ports", Label: "Port tujuan unik", Deskripsi: "Banyaknya port tujuan berbeda yang diakses", Indikator: "Port scanning"},
+	{Key: "unique_src_ports", Label: "Port asal unik", Deskripsi: "Banyaknya port asal berbeda", Indikator: "Scanner otomatis"},
+	{Key: "login_fails", Label: "Login gagal", Deskripsi: "Jumlah kegagalan autentikasi", Indikator: "Brute force"},
+	{Key: "port_scans", Label: "Event port scan", Deskripsi: "Jumlah log terklasifikasi port_scan", Indikator: "Reconnaissance"},
+	{Key: "brute_forces", Label: "Event brute force", Deskripsi: "Jumlah log terklasifikasi brute_force", Indikator: "Brute force"},
+	{Key: "requests_per_minute", Label: "Aktivitas per menit", Deskripsi: "total_requests ÷ durasi (menit)", Indikator: "Serangan volumetrik"},
+	{Key: "port_diversity_ratio", Label: "Rasio keragaman port", Deskripsi: "unique_dest_ports ÷ total_requests (0–1)", Indikator: "Port scan (→ 1,0)"},
+	{Key: "fail_ratio", Label: "Rasio login gagal", Deskripsi: "login_fails ÷ total_requests (0–1)", Indikator: "Brute force (→ 1,0)"},
+}
+
+// IntrusionDetail menampilkan alur pengolahan satu hasil analisis secara utuh:
+// Tahap 1 log mentah MikroTik → Tahap 2 data diolah (9 fitur mentah & ternormalisasi)
+// → Tahap 3 skor anomali, keyakinan, dan keputusan (revisi penguji).
+func (h *Handlers) IntrusionDetail(w http.ResponseWriter, r *http.Request) {
+	ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+	tStr := r.URL.Query().Get("t")
+	at, err := time.Parse(time.RFC3339Nano, tStr)
+	if ip == "" || err != nil {
+		http.Redirect(w, r, "/intrusions", http.StatusFound)
+		return
+	}
+
+	res, err := database.GetIntrusionDetail(ip, at)
+	if err != nil {
+		h.render(w, r, "intrusion_detail.html", PageData{
+			Title: "Detail Analisis",
+			Flash: "Hasil analisis tidak ditemukan untuk IP dan waktu tersebut.",
+			Data:  map[string]interface{}{"found": false},
+		})
+		return
+	}
+
+	// Jendela analisis: log mentah IP ini pada [waktu hasil − window, waktu hasil]
+	window := res.WindowMinutes
+	if window <= 0 {
+		window = 10 // bawaan ANALYSIS_WINDOW_MINUTES
+	}
+	from := res.Time.Add(-time.Duration(window) * time.Minute)
+	rawLogs, totalRaw, err := database.GetRecentSyslogs("", ip, "", from, res.Time, 200, 0)
+	if err != nil {
+		rawLogs, totalRaw = nil, 0
+	}
+
+	// Susun tabel fitur: nilai mentah & ternormalisasi mengikuti katalog
+	feats := make([]featureInfo, 0, len(featureCatalog))
+	for _, f := range featureCatalog {
+		fi := f
+		if res.Features != nil {
+			fi.Raw = res.Features[f.Key]
+		}
+		if res.FeaturesScaled != nil {
+			if v, ok := res.FeaturesScaled[f.Key]; ok {
+				fi.Scaled, fi.HasScaled = v, true
+			}
+		}
+		feats = append(feats, fi)
+	}
+
+	eff, _ := effectiveSettings()
+	h.render(w, r, "intrusion_detail.html", PageData{
+		Title: "Detail Analisis — " + ip,
+		Data: map[string]interface{}{
+			"found":        true,
+			"res":          res,
+			"raw_logs":     rawLogs,
+			"total_raw":    totalRaw,
+			"window":       window,
+			"from":         from,
+			"features":     feats,
+			"has_features": res.Features != nil && len(res.Features) > 0,
+
+			"anomaly_threshold": eff["ANOMALY_THRESHOLD"],
+			"block_score":       eff["BLOCK_SCORE_THRESHOLD"],
+			"block_confidence":  eff["BLOCK_CONFIDENCE_THRESHOLD"],
+		},
+	})
 }

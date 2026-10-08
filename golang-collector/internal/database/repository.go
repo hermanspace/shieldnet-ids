@@ -5,6 +5,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -32,6 +33,13 @@ type IntrusionResult struct {
 	ActionTaken   string
 	Distributed   bool
 	DistributedTo []string
+
+	// Tahap pengolahan data: 9 fitur (mentah & ternormalisasi) + konteks jendela.
+	// Kosong (nil) untuk hasil lama yang tercatat sebelum pembaruan ini.
+	Features       map[string]float64
+	FeaturesScaled map[string]float64
+	RecordCount    int
+	WindowMinutes  int
 }
 
 // MikrotikNode merepresentasikan satu router MikroTik yang terdaftar.
@@ -140,10 +148,10 @@ func GetSyslogStats() (map[string]int, error) {
 	stats := map[string]int{}
 
 	queries := map[string]string{
-		"total_syslogs":   `SELECT COUNT(*) FROM syslogs WHERE time > NOW() - INTERVAL '24 hours'`,
+		"total_syslogs":    `SELECT COUNT(*) FROM syslogs WHERE time > NOW() - INTERVAL '24 hours'`,
 		"total_intrusions": `SELECT COUNT(*) FROM intrusion_results WHERE time > NOW() - INTERVAL '24 hours' AND is_intrusion = true`,
-		"active_nodes":    `SELECT COUNT(*) FROM mikrotik_nodes WHERE is_active = true`,
-		"blocked_ips":     `SELECT COUNT(DISTINCT ip_address) FROM access_list WHERE list_type = 'blacklist' AND is_active = true`,
+		"active_nodes":     `SELECT COUNT(*) FROM mikrotik_nodes WHERE is_active = true`,
+		"blocked_ips":      `SELECT COUNT(DISTINCT ip_address) FROM access_list WHERE list_type = 'blacklist' AND is_active = true`,
 	}
 
 	for key, q := range queries {
@@ -160,7 +168,8 @@ func GetSyslogStats() (map[string]int, error) {
 // GetRecentIntrusions mengambil hasil deteksi intrusi terbaru untuk dashboard.
 func GetRecentIntrusions(limit int) ([]IntrusionResult, error) {
 	query := `
-		SELECT time, source_ip, anomaly_score, is_intrusion, confidence, action_taken, distributed
+		SELECT time, source_ip, anomaly_score, is_intrusion, confidence, action_taken, distributed,
+		       COALESCE(record_count, 0)
 		FROM intrusion_results
 		WHERE is_intrusion = true
 		ORDER BY time DESC
@@ -176,7 +185,7 @@ func GetRecentIntrusions(limit int) ([]IntrusionResult, error) {
 	for rows.Next() {
 		var r IntrusionResult
 		if err := rows.Scan(&r.Time, &r.SourceIP, &r.AnomalyScore, &r.IsIntrusion,
-			&r.Confidence, &r.ActionTaken, &r.Distributed); err != nil {
+			&r.Confidence, &r.ActionTaken, &r.Distributed, &r.RecordCount); err != nil {
 			return nil, err
 		}
 		results = append(results, r)
@@ -193,7 +202,8 @@ func GetAllIntrusions(limit, offset int) ([]IntrusionResult, int, error) {
 	}
 
 	query := `
-		SELECT time, source_ip, anomaly_score, is_intrusion, confidence, action_taken, distributed
+		SELECT time, source_ip, anomaly_score, is_intrusion, confidence, action_taken, distributed,
+		       COALESCE(record_count, 0)
 		FROM intrusion_results
 		ORDER BY time DESC
 		LIMIT $1 OFFSET $2
@@ -208,7 +218,7 @@ func GetAllIntrusions(limit, offset int) ([]IntrusionResult, int, error) {
 	for rows.Next() {
 		var r IntrusionResult
 		if err := rows.Scan(&r.Time, &r.SourceIP, &r.AnomalyScore, &r.IsIntrusion,
-			&r.Confidence, &r.ActionTaken, &r.Distributed); err != nil {
+			&r.Confidence, &r.ActionTaken, &r.Distributed, &r.RecordCount); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, r)
@@ -219,7 +229,9 @@ func GetAllIntrusions(limit, offset int) ([]IntrusionResult, int, error) {
 // GetFilteredIntrusions mengambil hasil deteksi dengan filter opsional:
 // search    — pencarian teks pada IP sumber (substring, case-insensitive)
 // eventType — jenis serangan berdasarkan event_type syslog dalam jendela analisis
-//             10 menit sebelum waktu hasil (login_fail, port_scan, syn_flood, dst.)
+//
+//	10 menit sebelum waktu hasil (login_fail, port_scan, syn_flood, dst.)
+//
 // action    — aksi keputusan sistem (allow / monitor / block)
 // Filter kosong berarti tidak diterapkan. Hasil diurutkan dari yang terbaru.
 func GetFilteredIntrusions(search, eventType, action string, limit, offset int) ([]IntrusionResult, int, error) {
@@ -254,7 +266,8 @@ func GetFilteredIntrusions(search, eventType, action string, limit, offset int) 
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT ir.time, ir.source_ip, ir.anomaly_score, ir.is_intrusion,
-		       ir.confidence, ir.action_taken, ir.distributed
+		       ir.confidence, ir.action_taken, ir.distributed,
+		       COALESCE(ir.record_count, 0)
 		FROM intrusion_results ir
 		%s
 		ORDER BY ir.time DESC
@@ -271,7 +284,7 @@ func GetFilteredIntrusions(search, eventType, action string, limit, offset int) 
 	for rows.Next() {
 		var r IntrusionResult
 		if err := rows.Scan(&r.Time, &r.SourceIP, &r.AnomalyScore, &r.IsIntrusion,
-			&r.Confidence, &r.ActionTaken, &r.Distributed); err != nil {
+			&r.Confidence, &r.ActionTaken, &r.Distributed, &r.RecordCount); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, r)
@@ -315,12 +328,29 @@ func GetIntrusionStats() (IntrusionStats, error) {
 // Waktu diisi NOW() oleh database — payload dari Python tidak membawa timestamp,
 // sehingga r.Time selalu zero value dan tidak boleh dipakai langsung.
 func InsertIntrusionResult(r IntrusionResult) error {
+	// Fitur disimpan sebagai JSONB agar bisa ditampilkan kembali di dashboard
+	// (tahap "data diolah") maupun di Grafana. Nil → NULL.
+	var featJSON, scaledJSON interface{}
+	if r.Features != nil {
+		if b, err := json.Marshal(r.Features); err == nil {
+			featJSON = string(b)
+		}
+	}
+	if r.FeaturesScaled != nil {
+		if b, err := json.Marshal(r.FeaturesScaled); err == nil {
+			scaledJSON = string(b)
+		}
+	}
+
 	query := `
-		INSERT INTO intrusion_results (time, source_ip, anomaly_score, is_intrusion, confidence, action_taken)
-		VALUES (NOW(), $1, $2, $3, $4, $5)
+		INSERT INTO intrusion_results
+			(time, source_ip, anomaly_score, is_intrusion, confidence, action_taken,
+			 features, features_scaled, record_count, window_minutes)
+		VALUES (NOW(), $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
 	`
 	_, err := DB.Exec(context.Background(), query,
 		r.SourceIP, r.AnomalyScore, r.IsIntrusion, r.Confidence, r.ActionTaken,
+		featJSON, scaledJSON, r.RecordCount, r.WindowMinutes,
 	)
 	return err
 }
@@ -677,4 +707,57 @@ func UpdateUserPasswordByUsername(username, passwordHash string) error {
 	_, err := DB.Exec(context.Background(),
 		"UPDATE users SET password = $1 WHERE username = $2", passwordHash, username)
 	return err
+}
+
+// =============================================================================
+// Tahap pengolahan data (revisi penguji): kolom fitur pada intrusion_results
+// dan pengambilan satu hasil analisis lengkap untuk halaman detail.
+// =============================================================================
+
+// EnsureSchemaUpgrades menambahkan kolom fitur hasil olahan pada database lama
+// yang diinisialisasi sebelum kolom tersebut ada di init.sql. Aman dipanggil
+// berulang (ADD COLUMN IF NOT EXISTS).
+func EnsureSchemaUpgrades() error {
+	_, err := DB.Exec(context.Background(), `
+		ALTER TABLE intrusion_results
+			ADD COLUMN IF NOT EXISTS features        JSONB,
+			ADD COLUMN IF NOT EXISTS features_scaled JSONB,
+			ADD COLUMN IF NOT EXISTS record_count    INTEGER,
+			ADD COLUMN IF NOT EXISTS window_minutes  INTEGER
+	`)
+	return err
+}
+
+// GetIntrusionDetail mengambil satu hasil analisis lengkap (termasuk 9 fitur
+// mentah & ternormalisasi) berdasarkan IP sumber dan waktu hasil. Toleransi
+// ±1 detik dipakai agar waktu dari URL tetap cocok meski presisi berbeda.
+func GetIntrusionDetail(sourceIP string, at time.Time) (*IntrusionResult, error) {
+	query := `
+		SELECT time, source_ip, anomaly_score, is_intrusion, confidence, action_taken,
+		       distributed, COALESCE(distributed_to, '{}'),
+		       COALESCE(features::text, ''), COALESCE(features_scaled::text, ''),
+		       COALESCE(record_count, 0), COALESCE(window_minutes, 0)
+		FROM intrusion_results
+		WHERE source_ip = $1
+		  AND time BETWEEN $2::timestamptz - interval '1 second'
+		               AND $2::timestamptz + interval '1 second'
+		ORDER BY time DESC
+		LIMIT 1
+	`
+	var r IntrusionResult
+	var featText, scaledText string
+	err := DB.QueryRow(context.Background(), query, sourceIP, at).Scan(
+		&r.Time, &r.SourceIP, &r.AnomalyScore, &r.IsIntrusion, &r.Confidence, &r.ActionTaken,
+		&r.Distributed, &r.DistributedTo, &featText, &scaledText, &r.RecordCount, &r.WindowMinutes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("hasil analisis tidak ditemukan: %w", err)
+	}
+	if featText != "" {
+		_ = json.Unmarshal([]byte(featText), &r.Features)
+	}
+	if scaledText != "" {
+		_ = json.Unmarshal([]byte(scaledText), &r.FeaturesScaled)
+	}
+	return &r, nil
 }

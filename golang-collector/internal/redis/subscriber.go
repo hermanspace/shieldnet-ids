@@ -25,6 +25,13 @@ type AnalysisResult struct {
 	AnomalyScore float64 `json:"anomaly_score"`
 	Confidence   float64 `json:"confidence"`
 	Action       string  `json:"action"` // "block", "monitor", atau "allow"
+
+	// 9 fitur hasil olahan (mentah & ternormalisasi) beserta konteks jendela
+	// analisis — disimpan agar dashboard dapat menampilkan tahap pengolahan data
+	Features       map[string]float64 `json:"features"`
+	FeaturesScaled map[string]float64 `json:"features_scaled"`
+	RecordCount    int                `json:"record_count"`
+	WindowMinutes  int                `json:"window_minutes"`
 }
 
 // ResultHandler adalah tipe fungsi yang dipanggil ketika hasil analisis diterima.

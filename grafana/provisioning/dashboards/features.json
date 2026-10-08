@@ -1,0 +1,128 @@
+{
+  "uid": "ids-features",
+  "title": "IDS - Data Mentah & Olahan",
+  "description": "Alur pengolahan data: log syslog mentah MikroTik -> 9 fitur perilaku (hasil olahan) -> skor anomali & keputusan. Revisi penguji sidang.",
+  "tags": ["ids", "thesis", "fitur"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Log Mentah Diterima (24 jam)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "unit": "none" } },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT COUNT(*) AS \"Log\" FROM syslogs WHERE time > NOW() - INTERVAL '24 hours'" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Analisis Dihasilkan (24 jam)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" }, "unit": "none" } },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT COUNT(*) AS \"Analisis\" FROM intrusion_results WHERE time > NOW() - INTERVAL '24 hours'" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Rata-rata Log per Analisis",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "green" }, "unit": "none", "decimals": 1 } },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT COALESCE(AVG(record_count), 0) AS \"Log/analisis\" FROM intrusion_results WHERE time > NOW() - INTERVAL '24 hours' AND record_count IS NOT NULL" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Terdeteksi Intrusi (24 jam)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" }, "unit": "none" } },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT COUNT(*) AS \"Intrusi\" FROM intrusion_results WHERE time > NOW() - INTERVAL '24 hours' AND is_intrusion = true" }]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "TAHAP 1 - Data Mentah: Log Syslog MikroTik (50 terbaru)",
+      "description": "Log asli yang ditarik dari router melalui remote syslog UDP 514, sebelum diolah.",
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": {}, "overrides": [
+        { "matcher": { "id": "byName", "options": "Pesan Mentah" }, "properties": [{ "id": "custom.width", "value": 620 }] }
+      ] },
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "Waktu", "desc": true }] },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT time AS \"Waktu\", node_id AS \"Node\", source_ip AS \"IP Sumber\", event_type AS \"Jenis Event\", protocol AS \"Proto\", source_port AS \"Port Asal\", dest_port AS \"Port Tujuan\", raw_message AS \"Pesan Mentah\" FROM syslogs ORDER BY time DESC LIMIT 50" }]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "TAHAP 2 & 3 - Data Diolah: 9 Fitur per IP -> Skor & Keputusan (50 terbaru)",
+      "description": "Setiap baris = satu analisis. Kolom fitur adalah hasil olahan dari log mentah dalam jendela 10 menit; skor & keputusan adalah keluaran Isolation Forest + Decision Engine.",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 15 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "decimals": 3 }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Skor" }, "properties": [
+          { "id": "custom.cellOptions", "value": { "type": "color-background" } },
+          { "id": "thresholds", "value": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null }, { "color": "orange", "value": -0.05 }, { "color": "green", "value": 0 } ] } },
+          { "id": "decimals", "value": 4 } ] },
+        { "matcher": { "id": "byName", "options": "Aksi" }, "properties": [
+          { "id": "mappings", "value": [ { "type": "value", "options": {
+            "block": { "color": "red", "index": 0, "text": "BLOCK" },
+            "monitor": { "color": "orange", "index": 1, "text": "MONITOR" },
+            "allow": { "color": "green", "index": 2, "text": "ALLOW" } } } ] },
+          { "id": "custom.cellOptions", "value": { "type": "color-text" } } ] }
+      ] },
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "Waktu", "desc": true }] },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT time AS \"Waktu\", source_ip AS \"IP Sumber\", record_count AS \"Jml Log\", (features->>'total_requests')::float AS \"total_requests\", (features->>'unique_dest_ports')::float AS \"unique_dest_ports\", (features->>'unique_src_ports')::float AS \"unique_src_ports\", (features->>'login_fails')::float AS \"login_fails\", (features->>'port_scans')::float AS \"port_scans\", (features->>'brute_forces')::float AS \"brute_forces\", (features->>'requests_per_minute')::float AS \"req_per_min\", (features->>'port_diversity_ratio')::float AS \"port_diversity\", (features->>'fail_ratio')::float AS \"fail_ratio\", anomaly_score AS \"Skor\", confidence AS \"Keyakinan\", action_taken AS \"Aksi\" FROM intrusion_results WHERE features IS NOT NULL ORDER BY time DESC LIMIT 50" }]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Skor Anomali dari Waktu ke Waktu (negatif = anomali)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 27 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "points", "pointSize": 6 }, "color": { "mode": "thresholds" },
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "orange", "value": -0.05 }, { "color": "green", "value": 0 } ] } } },
+      "options": { "legend": { "displayMode": "hidden" } },
+      "targets": [{ "refId": "A", "format": "time_series",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT time, anomaly_score AS \"Skor\" FROM intrusion_results WHERE $__timeFilter(time) ORDER BY time" }]
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "Rata-rata Fitur: Normal vs Intrusi (24 jam)",
+      "description": "Perbandingan nilai mentah rata-rata tiap fitur antara IP normal dan IP terdeteksi intrusi.",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 27 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+      "fieldConfig": { "defaults": { "decimals": 2 } },
+      "options": { "orientation": "horizontal", "showValue": "auto", "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{ "refId": "A", "format": "table",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb-ids" },
+        "rawSql": "SELECT f.\"Fitur\", AVG(CASE WHEN NOT is_intrusion THEN f.val END) AS \"Normal\", AVG(CASE WHEN is_intrusion THEN f.val END) AS \"Intrusi\" FROM intrusion_results ir, LATERAL (VALUES ('total_requests',(features->>'total_requests')::float), ('unique_dest_ports',(features->>'unique_dest_ports')::float), ('login_fails',(features->>'login_fails')::float), ('requests_per_minute',(features->>'requests_per_minute')::float), ('port_diversity_ratio',(features->>'port_diversity_ratio')::float), ('fail_ratio',(features->>'fail_ratio')::float)) AS f(\"Fitur\", val) WHERE ir.time > NOW() - INTERVAL '24 hours' AND features IS NOT NULL GROUP BY f.\"Fitur\" ORDER BY f.\"Fitur\"" }]
+    }
+  ]
+}

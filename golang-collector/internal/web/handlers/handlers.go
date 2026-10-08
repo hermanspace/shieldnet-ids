@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"thesis-ids/golang-collector/internal/auth"
 )
@@ -24,11 +25,12 @@ func NewHandlers(tmplDir string, funcs template.FuncMap) *Handlers {
 // PageData adalah struct umum yang dikirim ke semua template sebagai data halaman.
 // Menyertakan informasi pengguna yang login untuk ditampilkan di navbar.
 type PageData struct {
-	Title    string
-	Username string
-	Role     string
-	Data     interface{} // Data spesifik tiap halaman
-	Flash    string      // Pesan sukses/error sementara
+	Title      string
+	Username   string
+	Role       string
+	GrafanaURL string      // URL dasar Grafana (dari env GRAFANA_URL) untuk tautan di menu
+	Data       interface{} // Data spesifik tiap halaman
+	Flash      string      // Pesan sukses/error sementara
 }
 
 // render merender template HTML dengan parsing per-request sehingga setiap halaman
@@ -36,6 +38,9 @@ type PageData struct {
 func (h *Handlers) render(w http.ResponseWriter, r *http.Request, templateName string, data PageData) {
 	data.Username = auth.GetLoggedInUser(r)
 	data.Role = auth.GetUserRole(r)
+	// URL Grafana dapat diatur per lingkungan: lokal http://localhost:3000,
+	// produksi mis. https://domain/grafana (lewat reverse proxy)
+	data.GrafanaURL = strings.TrimRight(envOr("GRAFANA_URL", "http://localhost:3000"), "/")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 

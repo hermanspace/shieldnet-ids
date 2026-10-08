@@ -7,7 +7,9 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"time"
 
 	"thesis-ids/golang-collector/config"
 	"thesis-ids/golang-collector/internal/auth"
@@ -87,6 +89,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/dashboard", auth.RequireLogin(h.Dashboard))
 	mux.HandleFunc("/syslogs", auth.RequireLogin(h.Syslogs))
 	mux.HandleFunc("/intrusions", auth.RequireLogin(h.Intrusions))
+	mux.HandleFunc("/intrusions/detail", auth.RequireLogin(h.IntrusionDetail))
 	mux.HandleFunc("/about", auth.RequireLogin(h.About))
 	mux.HandleFunc("/profile", auth.RequireLogin(h.Profile))
 	mux.HandleFunc("/profile/password", auth.RequireLogin(h.ChangeOwnPassword))
@@ -144,6 +147,12 @@ func templateFuncs() template.FuncMap {
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		// detailLink membangun URL halaman detail analisis (mentah → olahan → skor)
+		// dengan waktu ber-presisi nano dan di-escape agar '+' zona waktu aman di query.
+		"detailLink": func(ip string, t time.Time) string {
+			return "/intrusions/detail?ip=" + url.QueryEscape(ip) +
+				"&t=" + url.QueryEscape(t.Format(time.RFC3339Nano))
+		},
 		// mul mendukung dua tipe berbeda untuk kompatibilitas template
 		"mul": func(a, b interface{}) float64 {
 			var fa, fb float64
@@ -166,6 +175,17 @@ func templateFuncs() template.FuncMap {
 				return 0
 			}
 			return a / b
+		},
+		// zColor memberi warna nilai ternormalisasi: >+1 menonjol (merah), <−1 biru
+		"zColor": func(z float64) string {
+			switch {
+			case z > 1.0:
+				return "text-red-600 font-semibold"
+			case z < -1.0:
+				return "text-blue-600"
+			default:
+				return "text-gray-700"
+			}
 		},
 		"gt": func(a, b int) bool { return a > b },
 		"lt": func(a, b int) bool { return a < b },

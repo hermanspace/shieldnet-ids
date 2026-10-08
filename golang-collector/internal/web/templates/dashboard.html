@@ -101,7 +101,7 @@
             termasuk heatmap, histogram distribusi skor anomali, dan statistik per node.
         </p>
         <div class="space-y-3">
-            <a href="http://localhost:3000/d/ids-overview" target="_blank"
+            <a href="{{.GrafanaURL}}/d/ids-overview" target="_blank"
                class="flex items-center p-3 bg-orange-50 rounded-md hover:bg-orange-100 transition-colors">
                 <svg class="h-5 w-5 text-orange-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -112,7 +112,7 @@
                     <p class="text-xs text-orange-500">Statistik real-time keseluruhan</p>
                 </div>
             </a>
-            <a href="http://localhost:3000/d/ids-intrusions" target="_blank"
+            <a href="{{.GrafanaURL}}/d/ids-intrusions" target="_blank"
                class="flex items-center p-3 bg-red-50 rounded-md hover:bg-red-100 transition-colors">
                 <svg class="h-5 w-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -123,7 +123,7 @@
                     <p class="text-xs text-red-500">Distribusi skor anomali & akurasi</p>
                 </div>
             </a>
-            <a href="http://localhost:3000/d/ids-nodes" target="_blank"
+            <a href="{{.GrafanaURL}}/d/ids-nodes" target="_blank"
                class="flex items-center p-3 bg-green-50 rounded-md hover:bg-green-100 transition-colors">
                 <svg class="h-5 w-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -132,6 +132,17 @@
                 <div>
                     <p class="text-sm font-medium text-green-700">Statistik Per Node</p>
                     <p class="text-xs text-green-500">Aktivitas per router MikroTik</p>
+                </div>
+            </a>
+            <a href="{{.GrafanaURL}}/d/ids-features" target="_blank"
+               class="flex items-center p-3 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors">
+                <svg class="h-5 w-5 text-purple-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-medium text-purple-700">Data Mentah &amp; Olahan</p>
+                    <p class="text-xs text-purple-500">Log syslog mentah → 9 fitur → skor</p>
                 </div>
             </a>
         </div>

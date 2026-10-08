@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS intrusion_results (
     confidence     FLOAT,                -- Tingkat keyakinan deteksi (0.0 - 1.0)
     action_taken   TEXT,                 -- block / monitor / allow
     distributed    BOOLEAN DEFAULT FALSE,-- Sudah didistribusikan ke semua node?
-    distributed_to TEXT[]                -- Daftar node yang sudah menerima pemblokiran
+    distributed_to TEXT[],               -- Daftar node yang sudah menerima pemblokiran
+    features       JSONB,                -- 9 fitur hasil olahan (nilai mentah) per analisis
+    features_scaled JSONB,               -- 9 fitur setelah normalisasi StandardScaler
+    record_count   INTEGER,              -- Jumlah log mentah dalam jendela analisis
+    window_minutes INTEGER               -- Lebar jendela analisis (menit)
 );
 
 -- Jadikan tabel intrusion_results sebagai hypertable

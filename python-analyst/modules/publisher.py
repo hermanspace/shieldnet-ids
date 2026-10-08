@@ -45,10 +45,14 @@ class ResultPublisher:
         return False
 
     def publish_result(self, source_ip: str, is_intrusion: bool,
-                       anomaly_score: float, confidence: float, action: str) -> bool:
+                       anomaly_score: float, confidence: float, action: str,
+                       features: dict = None, features_scaled: dict = None,
+                       record_count: int = 0, window_minutes: int = 0) -> bool:
         """
         mempublikasikan hasil analisis satu IP ke channel Redis.
         format JSON yang dikirim harus sesuai dengan struct AnalysisResult di Golang.
+        features / features_scaled menyertakan 9 fitur hasil olahan (mentah dan
+        ternormalisasi) agar dashboard dapat menampilkan tahap pengolahan data.
         """
         if self.client is None:
             logger.error("Belum terhubung ke Redis.")
@@ -60,6 +64,10 @@ class ResultPublisher:
             "anomaly_score": anomaly_score,
             "confidence": confidence,
             "action": action,
+            "features": features or {},
+            "features_scaled": features_scaled or {},
+            "record_count": record_count,
+            "window_minutes": window_minutes,
         }
 
         try:

@@ -1,0 +1,172 @@
+{{define "content"}}
+{{$d := .Data}}
+
+<!-- =====================================================================
+     DETAIL ANALISIS — alur pengolahan data satu hasil deteksi
+     Tahap 1: log mentah MikroTik (data yang ditarik dari syslog)
+     Tahap 2: data diolah sistem (9 fitur mentah → ternormalisasi)
+     Tahap 3: skor anomali, keyakinan, dan keputusan
+     (Revisi penguji: tampilkan data mentah lalu data yang sudah diolah)
+     ===================================================================== -->
+
+<div class="mb-4">
+    <a href="/intrusions" class="text-sm text-blue-600 hover:underline">&larr; Kembali ke Hasil Deteksi Intrusi</a>
+</div>
+
+{{if not (index $d "found")}}
+<div class="bg-white rounded-lg shadow p-6 text-sm text-gray-600">Data tidak ditemukan.</div>
+{{else}}
+{{$res := index $d "res"}}
+
+<!-- Ringkasan alur -->
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span class="px-3 py-1.5 rounded-full bg-gray-800 text-white font-semibold">1 · Data Mentah</span>
+        <span class="text-gray-400">→</span>
+        <span class="px-3 py-1.5 rounded-full bg-purple-600 text-white font-semibold">2 · Data Diolah (9 Fitur)</span>
+        <span class="text-gray-400">→</span>
+        <span class="px-3 py-1.5 rounded-full bg-blue-600 text-white font-semibold">3 · Skor &amp; Keputusan</span>
+        <span class="ml-auto text-gray-500">
+            IP <span class="font-mono font-semibold text-gray-800">{{$res.SourceIP}}</span>
+            · dianalisis {{$res.Time.Format "02/01/2006 15:04:05"}}
+            · jendela {{index $d "window"}} menit
+        </span>
+    </div>
+</div>
+
+<!-- ================= TAHAP 1: DATA MENTAH ================= -->
+<div class="bg-white rounded-lg shadow mb-6">
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div>
+            <h3 class="font-semibold text-gray-800">Tahap 1 — Data Mentah dari Log MikroTik</h3>
+            <p class="text-xs text-gray-500 mt-0.5">
+                Syslog asli yang dikirim router untuk IP ini, dalam jendela
+                {{(index $d "from").Format "15:04:05"}} – {{$res.Time.Format "15:04:05"}}
+                ({{index $d "window"}} menit sebelum hasil). Inilah bahan yang diolah sistem.
+            </p>
+        </div>
+        <span class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">{{index $d "total_raw"}} baris log</span>
+    </div>
+    <div class="overflow-x-auto max-h-96 overflow-y-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-xs">
+            <thead class="bg-gray-50 sticky top-0">
+                <tr class="text-left text-gray-500 uppercase tracking-wider">
+                    <th class="px-4 py-2">Waktu</th>
+                    <th class="px-4 py-2">Node</th>
+                    <th class="px-4 py-2">Jenis Event</th>
+                    <th class="px-4 py-2">Proto</th>
+                    <th class="px-4 py-2">Port Asal → Tujuan</th>
+                    <th class="px-4 py-2">Pesan Mentah (raw_message)</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {{$raw := index $d "raw_logs"}}
+                {{if $raw}}
+                {{range $raw}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-600">{{.Time.Format "15:04:05"}}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-700">{{.NodeID}}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">
+                        {{if eq .EventType "login_fail"}}<span class="px-1.5 py-0.5 rounded bg-red-100 text-red-700">{{.EventType}}</span>
+                        {{else if or (eq .EventType "port_scan") (eq .EventType "syn_flood") (eq .EventType "brute_force")}}<span class="px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">{{.EventType}}</span>
+                        {{else}}<span class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{.EventType}}</span>{{end}}
+                    </td>
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-600">{{.Protocol}}</td>
+                    <td class="px-4 py-2 whitespace-nowrap font-mono text-gray-700">{{.SourcePort}} → {{.DestPort}}</td>
+                    <td class="px-4 py-2 font-mono text-gray-600 break-all">{{.RawMessage}}</td>
+                </tr>
+                {{end}}
+                {{else}}
+                <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">
+                    Log mentah untuk jendela ini sudah tidak tersedia (mungkin telah dibersihkan dari database).
+                </td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ================= TAHAP 2: DATA DIOLAH ================= -->
+<div class="bg-white rounded-lg shadow mb-6">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="font-semibold text-gray-800">Tahap 2 — Data yang Sudah Diolah Sistem (9 Fitur Perilaku)</h3>
+        <p class="text-xs text-gray-500 mt-0.5">
+            Seluruh baris log di atas diringkas menjadi 9 angka perilaku (nilai mentah),
+            lalu dinormalisasi dengan StandardScaler <span class="font-mono">z = (x − μ) / σ</span>
+            agar setiap fitur berskala setara sebelum masuk ke Isolation Forest.
+        </p>
+    </div>
+    {{if index $d "has_features"}}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50">
+                <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                    <th class="px-4 py-2">#</th>
+                    <th class="px-4 py-2">Fitur</th>
+                    <th class="px-4 py-2">Definisi</th>
+                    <th class="px-4 py-2 text-right">Nilai Mentah</th>
+                    <th class="px-4 py-2 text-right">Ternormalisasi (z)</th>
+                    <th class="px-4 py-2">Indikator</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {{range $i, $f := index $d "features"}}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 text-gray-400 text-xs">{{add $i 1}}</td>
+                    <td class="px-4 py-2">
+                        <div class="font-mono text-xs text-gray-800">{{$f.Key}}</div>
+                        <div class="text-xs text-gray-500">{{$f.Label}}</div>
+                    </td>
+                    <td class="px-4 py-2 text-xs text-gray-600">{{$f.Deskripsi}}</td>
+                    <td class="px-4 py-2 text-right font-mono font-semibold text-gray-900">{{printf "%.4g" $f.Raw}}</td>
+                    <td class="px-4 py-2 text-right font-mono {{if $f.HasScaled}}{{zColor $f.Scaled}}{{else}}text-gray-400{{end}}">
+                        {{if $f.HasScaled}}{{printf "%+.3f" $f.Scaled}}{{else}}—{{end}}
+                    </td>
+                    <td class="px-4 py-2 text-xs text-gray-500">{{$f.Indikator}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="px-6 py-3 border-t border-gray-100 text-xs text-gray-500">
+        Nilai ternormalisasi <span class="text-red-600 font-semibold">&gt; +1</span> berarti fitur itu jauh di atas rata-rata trafik normal
+        (menonjol sebagai penyebab anomali); sekitar 0 berarti setara dengan rata-rata. Jumlah log yang diolah:
+        <span class="font-semibold">{{$res.RecordCount}}</span>.
+    </div>
+    {{else}}
+    <div class="px-6 py-6 text-sm text-gray-500">
+        Fitur hasil olahan belum tersimpan untuk hasil ini — hasil tercatat sebelum pembaruan penyimpanan fitur.
+        Hasil analisis baru akan menampilkan 9 fitur lengkap di sini.
+    </div>
+    {{end}}
+</div>
+
+<!-- ================= TAHAP 3: SKOR & KEPUTUSAN ================= -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="bg-white rounded-lg shadow p-5">
+        <p class="text-xs text-gray-500 mb-1">Skor anomali (Isolation Forest)</p>
+        <p class="text-3xl font-bold font-mono {{scoreColor $res.AnomalyScore}}">{{printf "%.4f" $res.AnomalyScore}}</p>
+        <p class="text-xs text-gray-400 mt-1">negatif = anomali · ambang deteksi {{index $d "anomaly_threshold"}}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-5">
+        <p class="text-xs text-gray-500 mb-1">Keyakinan (kepastian skor × kecukupan data)</p>
+        <p class="text-3xl font-bold font-mono {{confColor $res.Confidence}}">{{printf "%.1f%%" (mul $res.Confidence 100.0)}}</p>
+        <p class="text-xs text-gray-400 mt-1">syarat blokir: skor &lt; {{index $d "block_score"}} dan keyakinan ≥ {{index $d "block_confidence"}}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-5">
+        <p class="text-xs text-gray-500 mb-1">Keputusan Decision Engine</p>
+        <div class="mt-1 flex items-center gap-2">
+            {{if $res.IsIntrusion}}<span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">Intrusi</span>
+            {{else}}<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Normal</span>{{end}}
+            {{if eq $res.ActionTaken "block"}}<span class="px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded border border-red-200">Blokir</span>
+            {{else if eq $res.ActionTaken "monitor"}}<span class="px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-700 rounded border border-yellow-200">Monitor</span>
+            {{else}}<span class="px-2 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded border border-green-200">Izinkan</span>{{end}}
+        </div>
+        <p class="text-xs text-gray-400 mt-2">
+            {{if $res.Distributed}}Terdistribusi ke: <span class="font-mono text-gray-600">{{range $i, $n := $res.DistributedTo}}{{if $i}}, {{end}}{{$n}}{{end}}</span>
+            {{else if eq $res.ActionTaken "block"}}Distribusi ke node: belum tercatat{{else}}Tidak didistribusikan (bukan aksi blokir){{end}}
+        </p>
+    </div>
+</div>
+{{end}}
+{{end}}

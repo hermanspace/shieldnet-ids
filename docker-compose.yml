@@ -111,6 +111,10 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
       GF_SERVER_HTTP_PORT: 3000
+      # Untuk produksi di balik reverse proxy subpath (mis. https://domain/grafana/):
+      # set GRAFANA_ROOT_URL=https://domain/grafana/ dan GRAFANA_SUB_PATH=true di .env
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: ${GRAFANA_SUB_PATH:-false}
       GF_AUTH_ANONYMOUS_ENABLED: false
       TZ: Asia/Jakarta
       GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Jakarta
