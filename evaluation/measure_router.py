@@ -115,7 +115,9 @@ def compare(a, b):
             if not row:
                 sys.exit(f"Fase '{label}' belum direkam. Jalankan: make measure LABEL={label} DURATION=300")
             runs[label] = {r["node_id"]: r for r in row["summary"]}
-            print(f">> Fase '{label}': {row['started_at']:%Y-%m-%d %H:%M} – {row['ended_at']:%H:%M} UTC")
+            sa = row["started_at"].astimezone(timezone.utc)
+            ea = row["ended_at"].astimezone(timezone.utc)
+            print(f">> Fase '{label}': {sa:%Y-%m-%d %H:%M} – {ea:%H:%M} UTC ({len(row['summary'])} node)")
     conn.close()
     nodes = sorted(set(runs[a]) | set(runs[b]))
     print(f"\n>> Perbandingan beban router: '{a}' → '{b}'  (ISO/IEC 25023 resource utilization; metrik ≈ RFC 2790 HOST-RESOURCES-MIB)")
