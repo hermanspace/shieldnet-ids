@@ -164,6 +164,10 @@ dicatat (log) dan dikirimkan ke ShieldNet IDS.
 
 > **Penting:** Rule logging harus berada **sebelum** rule DROP apa pun,
 > atau traffic yang di-drop tidak akan sempat dicatat.
+>
+> **Catatan:** `place-before=0` hanya berlaku bila sudah ada rule lain. Pada router
+> dengan daftar filter **kosong** perintah itu gagal dengan `no such item` — hilangkan
+> `place-before=...` lalu atur urutan dengan `/ip firewall filter move`.
 
 ---
 
@@ -314,6 +318,37 @@ Untuk mendeteksi brute force SSH/Winbox, aktifkan logging untuk event login:
 
 ---
 
+### 1.6a Sinkronisasi Waktu (NTP) — wajib untuk pengukuran
+
+Waktu router dipakai untuk timestamp syslog dan perbandingan beban sebelum/sesudah.
+
+```
+/system clock set time-zone-name=Asia/Jakarta
+/system ntp client set enabled=yes servers=id.pool.ntp.org,time.google.com
+/system ntp client print
+```
+
+### 1.6b Identitas Node = IP Sumber Syslog
+
+ShieldNet mengenali router dari **alamat IP pengirim paket syslog** sebagaimana
+dilihat server (fungsi `inferNodeID`). IP yang didaftarkan di halaman *Node MikroTik*
+harus sama dengan IP tersebut; bila berbeda, log tercatat sebagai `unknown-<ip>` di
+menu *Data Syslog* — gunakan nilai `unknown-<ip>` itu sebagai IP node. Untuk router
+di balik CGNAT, IP publik dapat dilihat dengan `/ip cloud print` (`public-address`).
+
+### 1.6c Mematikan / Menghidupkan Pengiriman Log (untuk pengukuran beban)
+
+Dipakai pada prosedur `make measure` (fase *sebelum* = log nonaktif, *sesudah* = aktif):
+
+```
+/system logging disable [find action=remote-ids]
+/system logging enable  [find action=remote-ids]
+```
+
+Poller sumber daya (`/system/resource/print` via API) tetap berjalan pada kedua fase.
+
+---
+
 ### 1.7 Verifikasi Konfigurasi MikroTik
 
 Sebelum mendaftarkan node ke ShieldNet IDS, verifikasi semua konfigurasi sudah benar:
@@ -351,8 +386,7 @@ Sebelum mendaftarkan node ke ShieldNet IDS, verifikasi semua konfigurasi sudah b
 2. Login dengan akun **admin** atau **operator**
 
    ```
-   Akun default: admin / admin123
-   URL: http://localhost:8080/login
+   URL produksi: https://shieldnet.hsmart.app/login
    ```
 
 ---
@@ -512,6 +546,15 @@ Ganti nilai dalam `< >` dengan nilai yang sesuai.
 # ============================================================
 /ip firewall filter add chain=input src-address-list=ids-blocked action=drop comment="ShieldNet IDS: block" place-before=1
 /ip firewall filter add chain=forward src-address-list=ids-blocked action=drop comment="ShieldNet IDS: block forward" place-before=2
+
+# ============================================================
+# BLOK 5b: NTP (wajib untuk timestamp & pengukuran beban)
+# ============================================================
+/system clock set time-zone-name=Asia/Jakarta
+/system ntp client set enabled=yes servers=id.pool.ntp.org,time.google.com
+
+# Catatan: pada router dengan filter kosong, hapus place-before=... dari BLOK 3/5,
+# lalu urutkan dengan: /ip firewall filter move <nomor> destination=<posisi>
 
 # ============================================================
 # BLOK 6: Verifikasi
